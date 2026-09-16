@@ -1,0 +1,374 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #030718;
+    color: #f1f5f9;
+    overflow-x: hidden;
+  }
+  
+  .font-tech {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+}
+
+/* Deep Cyber HUD Sci-Fi Grid & Hologram Atmosphere */
+.cyber-grid-pattern {
+  background-color: #030718;
+  background-image: 
+    radial-gradient(circle at 50% 15%, rgba(6, 182, 212, 0.22) 0%, rgba(2, 6, 23, 0) 70%),
+    radial-gradient(circle at 10% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 90% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+    linear-gradient(to right, rgba(6, 182, 212, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(6, 182, 212, 0.09) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+}
+
+.blueprint-grid-light {
+  background-color: #050d26;
+  background-image:
+    radial-gradient(rgba(6, 182, 212, 0.2) 1px, transparent 0),
+    linear-gradient(to right, rgba(6, 182, 212, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(6, 182, 212, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px, 24px 24px, 24px 24px;
+}
+
+/* Sci-Fi HUD Double-Layer Glow Frame */
+.cyber-panel-frame {
+  position: relative;
+  background: rgba(5, 15, 38, 0.88);
+  backdrop-filter: blur(20px);
+  border: 2px solid rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 35px rgba(6, 182, 212, 0.25), inset 0 0 25px rgba(6, 182, 212, 0.08);
+}
+
+.cyber-panel-frame::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 28px;
+  pointer-events: none;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+.neon-border-glow {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.6), inset 0 0 10px rgba(6, 182, 212, 0.3);
+}
+
+.neon-blue-glow {
+  box-shadow: 0 0 30px rgba(14, 165, 233, 0.7);
+}
+
+/* High-Tech HUD Corners */
+.hud-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 10px 30px -5px rgba(14, 165, 233, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+
+.hud-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 14px;
+  height: 14px;
+  border-top: 2.5px solid #0284c7;
+  border-left: 2.5px solid #0284c7;
+  border-top-left-radius: 12px;
+  pointer-events: none;
+}
+
+.hud-card::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 14px;
+  height: 14px;
+  border-bottom: 2.5px solid #0284c7;
+  border-right: 2.5px solid #0284c7;
+  border-bottom-right-radius: 12px;
+  pointer-events: none;
+}
+
+/* Futuristic Scanline Animation */
+@keyframes tech-scan {
+  0% { top: 0%; opacity: 0; }
+  15% { opacity: 0.65; }
+  85% { opacity: 0.65; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.animate-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.9) 30%, rgba(56, 189, 248, 1) 50%, rgba(6, 182, 212, 0.9) 70%, transparent);
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.7);
+  animation: tech-scan 3.2s ease-in-out infinite;
+}
+
+/* Glowing Holographic Chips */
+.hologram-chip {
+  background: linear-gradient(135deg, rgba(224, 242, 254, 0.8), rgba(240, 249, 255, 0.95));
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 15px rgba(14, 165, 233, 0.15);
+}
+
+/* Wood Puzzle Board Styling (Image 2 style) */
+.wood-board-chassis {
+  background-color: #2a160d;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #351b10 0px,
+    #351b10 8px,
+    #2c170e 9px,
+    #221109 20px,
+    #1b0c06 21px,
+    #2c170e 22px
+  );
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.8), 0 15px 35px rgba(0, 0, 0, 0.5);
+}
+
+.wood-socket-sunken {
+  background-color: #160a05;
+  box-shadow: inset 0 10px 35px rgba(0, 0, 0, 0.98), inset 0 0 15px rgba(0, 0, 0, 0.9);
+}
+
+.wood-tray-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 #190d07;
+}
+
+.wood-tray-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.wood-tray-scrollbar::-webkit-scrollbar-track {
+  background: #170c06;
+  border-radius: 8px;
+}
+
+.wood-tray-scrollbar::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 8px;
+  border: 2px solid #170c06;
+}
+
+.wood-tray-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ffffff;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-certificate, #printable-certificate * {
+    visibility: visible;
+  }
+  #printable-certificate {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 20px;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 15px rgba(56, 189, 248, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(56, 189, 248, 0.8), inset 0 0 25px rgba(56, 189, 248, 0.4);
+  }
+}
+
+.glow-tech {
+  animation: pulse-glow 3s infinite ease-in-out;
+}
+
+@keyframes socket-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+
+.animate-socket-shake {
+  animation: socket-shake 0.4s ease-in-out;
+}
+
+/* High-Tech Clean Touch Effects */
+button, [role="button"], .cursor-pointer {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+button:active, [role="button"]:active {
+  transform: scale(0.98);
+  transition: transform 0.06s ease;
+}
+
+@keyframes cyber-ripple-outer {
+  0% {
+    transform: translate(-50%, -50%) scale(0.15) rotate(0deg);
+    opacity: 1;
+    border-color: rgba(6, 182, 212, 0.95);
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.9), inset 0 0 15px rgba(6, 182, 212, 0.5);
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.6) rotate(45deg);
+    opacity: 0;
+    border-color: rgba(34, 211, 238, 0.1);
+    box-shadow: 0 0 45px rgba(6, 182, 212, 0), inset 0 0 25px rgba(6, 182, 212, 0);
+  }
+}
+
+@keyframes cyber-ripple-inner {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 1;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(6, 182, 212, 0.8) 50%, transparent 80%);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0) 0%, rgba(6, 182, 212, 0) 70%, transparent 100%);
+  }
+}
+
+@keyframes cyber-reticle-spark {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.6);
+    opacity: 0;
+  }
+}
+
+.cyber-touch-ripple {
+  position: fixed;
+  pointer-events: none;
+  z-index: 99999;
+}
+
+.cyber-touch-outer {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid rgba(6, 182, 212, 0.9);
+  animation: cyber-ripple-outer 0.42s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+.cyber-touch-inner {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  animation: cyber-ripple-inner 0.35s ease-out forwards;
+}
+
+.cyber-touch-crosshair {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  animation: cyber-reticle-spark 0.3s ease-out forwards;
+}
+
+/* Clean Tech Grid Pattern */
+.cyber-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.cyber-glow-cyan {
+  box-shadow: 0 0 25px rgba(6, 182, 212, 0.25), inset 0 0 15px rgba(6, 182, 212, 0.1);
+}
+
+.cyber-glow-purple {
+  box-shadow: 0 0 25px rgba(168, 85, 247, 0.25), inset 0 0 15px rgba(168, 85, 247, 0.1);
+}
+
+.cyber-glow-amber {
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.25), inset 0 0 15px rgba(245, 158, 11, 0.1);
+}
+
+.cyber-border-gradient {
+  border-image: linear-gradient(135deg, #06b6d4, #8b5cf6, #f59e0b) 1;
+}
+
+/* 3D Cyber Card & Puzzle Piece Styles */
+.perspective-800 {
+  perspective: 800px;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+/* Holographic dynamic light sweep */
+@keyframes holo-sheen {
+  0% { transform: translateX(-150%) rotate(25deg); opacity: 0; }
+  20% { opacity: 0.6; }
+  80% { opacity: 0.6; }
+  100% { transform: translateX(250%) rotate(25deg); opacity: 0; }
+}
+
+.animate-holo-sheen {
+  animation: holo-sheen 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Jigsaw snap 3D celebration bounce */
+@keyframes jigsaw-snap-3d {
+  0% { transform: scale(1.18) rotate(3deg); filter: brightness(1.6) drop-shadow(0 0 20px #f59e0b); }
+  45% { transform: scale(0.94) rotate(-1deg); filter: brightness(1.2) drop-shadow(0 0 10px #f59e0b); }
+  75% { transform: scale(1.04) rotate(0.5deg); }
+  100% { transform: scale(1) rotate(0deg); filter: brightness(1) drop-shadow(0 0 0 transparent); }
+}
+
+.animate-jigsaw-snap {
+  animation: jigsaw-snap-3d 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Floating gentle 3D hover animation */
+@keyframes float-gentle-3d {
+  0%, 100% { transform: translateY(0) rotateX(0deg) rotateY(0deg); }
+  50% { transform: translateY(-5px) rotateX(2deg) rotateY(-2deg); }
+}
+
+.animate-float-3d {
+  animation: float-gentle-3d 5s ease-in-out infinite;
+}
+
+

@@ -1,0 +1,6 @@
+{
+  "name": "FACE CHALLENGE – Thử Thách Khuôn Mặt",
+  "description": "Trò chơi STEM giáo dục tương tác kết hợp nhận diện khuôn mặt, biểu cảm và câu hỏi trắc nghiệm ghép tranh bí mật.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
