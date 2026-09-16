@@ -22,7 +22,9 @@ const DEFAULT_SETTINGS: TeacherSettingsConfig = {
   enabledChallenges: CHALLENGE_LIBRARY.map(c => c.id),
   schoolName: 'Trường Tiểu học STEM Tân Tiến',
   teacherName: 'Ban Cố vấn Chuyên môn STEM',
-  activeQuestionSetId: 'set_lop3_tinhoc'
+  activeQuestionSetId: 'set_lop3_tinhoc',
+  puzzleImageUrl: '/assets/stem.svg',
+  puzzleThemeTitle: 'STEM - Khoa học, Công nghệ, Kỹ thuật & Toán học'
 };
 
 class IndexedDBService {

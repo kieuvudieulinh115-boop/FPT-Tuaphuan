@@ -647,13 +647,16 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
             passThreshold
           );
 
-          // Throttle score emission to avoid 60fps React state churn
+          // Throttle score emission to avoid high-frequency React state re-renders
           const timeSinceLastScore = now - lastEmittedScoreTimeRef.current;
           const scoreDelta = Math.abs(scoreRes.score - lastEmittedScoreValRef.current);
+          const hasStatusChanged = scoreRes.passed !== lastEmittedPassedRef.current;
+          
+          // Emit immediately on pass state change; otherwise throttle to at most 7-8 times/sec
           if (
-            scoreRes.passed !== lastEmittedPassedRef.current ||
-            scoreDelta >= 2 ||
-            timeSinceLastScore >= 75
+            hasStatusChanged ||
+            (scoreDelta >= 4 && timeSinceLastScore >= 120) ||
+            timeSinceLastScore >= 250
           ) {
             lastEmittedScoreTimeRef.current = now;
             lastEmittedScoreValRef.current = scoreRes.score;

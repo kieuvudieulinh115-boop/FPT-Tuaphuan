@@ -96,15 +96,15 @@ function generateJigsawEdge(
 // +1: top piece tab points DOWN. -1: top piece blank indents UP (bottom piece tab points UP).
 const H_TABS_3x3 = [
   [1, -1, 1], // row 0 to 1
-  [-1, 1, -1] // row 1 to 2
+  [1, 1, 1]   // row 1 to 2
 ];
 
 // 3x3 Tab orientations (Vertical boundaries: 3 rows of 2 cols)
 // +1: left piece tab points RIGHT. -1: left piece blank indents LEFT (right piece tab points LEFT).
 const V_TABS_3x3 = [
-  [1, -1], // row 0
+  [1, 1],  // row 0
   [-1, 1], // row 1
-  [1, -1]  // row 2
+  [1, 1]   // row 2
 ];
 
 // Fallback for 2x4 (8 pieces) if ever needed

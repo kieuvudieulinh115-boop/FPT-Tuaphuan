@@ -101,7 +101,7 @@ const GameHeaderComponent: React.FC<GameHeaderProps> = ({
               }`}
             >
               <Box className="w-3.5 h-3.5" />
-              <span>Bàn Ghép Tranh</span>
+              <span>Thử Thách Ghép Tranh Bí Ẩn</span>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-black ${
                 currentView === 'assembly'
                   ? 'bg-slate-950 text-amber-300'

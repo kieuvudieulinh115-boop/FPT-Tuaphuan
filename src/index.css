@@ -186,6 +186,72 @@ video {
   background: #ffffff;
 }
 
+/* Sci-Fi Cyan Tray Scrollbar (Matching Reference Image) */
+.cyan-tray-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #06b6d4 #06152b;
+}
+
+.cyan-tray-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cyan-tray-scrollbar::-webkit-scrollbar-track {
+  background: #06152b;
+  border-radius: 8px;
+}
+
+.cyan-tray-scrollbar::-webkit-scrollbar-thumb {
+  background: #06b6d4;
+  border-radius: 8px;
+  border: 1px solid #08284d;
+}
+
+.cyan-tray-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #22d3ee;
+}
+
+/* Warm Overhead Wooden Desk Surface */
+.wood-desk-surface {
+  background-color: #2b170e;
+  background-image: 
+    radial-gradient(ellipse at 50% 30%, rgba(255, 230, 200, 0.08) 0%, transparent 70%),
+    repeating-linear-gradient(
+      to bottom,
+      #331c11 0px,
+      #331c11 24px,
+      #29150c 25px,
+      #241209 48px,
+      #1f0e06 49px,
+      #2c170e 50px
+    );
+}
+
+/* Inner 3x3 Wooden Board Planks (Honey / Cherry Wood) */
+.wood-planks-board {
+  background-color: #723e1e;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #7a4321 0px,
+    #7a4321 18px,
+    #693819 19px,
+    #5f3216 38px,
+    #532a11 39px,
+    #723e1e 40px
+  );
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.7);
+}
+
+@keyframes shakeWrongSlot {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.animate-shake-wrong {
+  animation: shakeWrongSlot 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
 @media print {
   body * {
     visibility: hidden;
@@ -390,6 +456,41 @@ button:active, [role="button"]:active {
 
 .animate-float-3d {
   animation: float-gentle-3d 5s ease-in-out infinite;
+}
+
+/* Mystery Puzzle Cyber Horizon Grid */
+.mystery-puzzle-bg {
+  background-color: #030713;
+  background-image: 
+    radial-gradient(circle at 50% 45%, rgba(245, 158, 11, 0.12) 0%, transparent 60%),
+    radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
+}
+
+.perspective-grid-floor {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48%;
+  background-image:
+    linear-gradient(to right, rgba(245, 158, 11, 0.16) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(245, 158, 11, 0.16) 1px, transparent 1px);
+  background-size: 64px 44px;
+  transform: perspective(500px) rotateX(68deg);
+  transform-origin: bottom center;
+  mask-image: linear-gradient(to top, rgba(0,0,0,1) 25%, transparent 100%);
+  pointer-events: none;
+}
+
+.horizon-glow-line {
+  position: absolute;
+  top: 52%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.3) 15%, rgba(245, 158, 11, 0.95) 50%, rgba(245, 158, 11, 0.3) 85%, transparent);
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.6);
+  pointer-events: none;
 }
 
 

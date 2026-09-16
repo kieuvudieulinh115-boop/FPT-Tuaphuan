@@ -22,44 +22,12 @@ export class TechTouchManager {
     window.removeEventListener('keydown', this.handleKeyDown);
   }
 
-  private handlePointerDown = (e: PointerEvent) => {
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-
-    // Check if target or parent is an interactive element
-    const interactive = target.closest(
-      'button, a, input, textarea, select, [role="button"], [tabindex], .cursor-pointer, [data-tech-touch], .interactive-tech'
-    );
-
-    // If interactive or clicked on game elements
-    if (interactive || target.classList.contains('cursor-pointer') || target.tagName === 'BUTTON') {
-      const now = Date.now();
-      // Throttle audio slightly so multi-touch doesn't clip
-      if (now - this.lastTapTimestamp > 35) {
-        this.lastTapTimestamp = now;
-        audioManager.playTechTap();
-      }
-
-      this.spawnCyberRipple(e.clientX, e.clientY);
-    }
+  private handlePointerDown = (_e: PointerEvent) => {
+    // Disabled global audio & DOM injection to eliminate UI lag and double-audio clicks
   };
 
-  private handleKeyDown = (e: KeyboardEvent) => {
-    // Exclude modifiers
-    if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
-
-    const target = e.target as HTMLElement | null;
-    const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
-
-    if (isInput || e.key === 'Enter' || e.key === ' ') {
-      audioManager.playTechKey();
-
-      if (target && isInput) {
-        const rect = target.getBoundingClientRect();
-        // Subtle ripple near the active input
-        this.spawnCyberRipple(rect.left + rect.width * 0.9, rect.top + rect.height / 2, true);
-      }
-    }
+  private handleKeyDown = (_e: KeyboardEvent) => {
+    // Disabled global keyboard sound injection
   };
 
   private activeRipples: HTMLElement[] = [];

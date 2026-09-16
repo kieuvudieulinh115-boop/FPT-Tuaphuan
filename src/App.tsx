@@ -14,6 +14,7 @@ import { INITIAL_STEM_QUESTIONS } from './data/initialQuestions';
 import { DEFAULT_PUZZLE_PIECES } from './data/puzzlePieces';
 import { dbService } from './services/storage/IndexedDBService';
 import { audioManager } from './services/audio/AudioManager';
+import { STEM_ARTWORK_URL, STEM_THEME_TITLE } from './data/stemArtwork';
 
 // Components
 import { GameHeader } from './components/GameHeader';
@@ -36,7 +37,9 @@ export default function App() {
     randomChallenges: false,
     enabledChallenges: CHALLENGE_LIBRARY.map(c => c.id),
     schoolName: 'Trường Tiểu học STEM Tân Tiến',
-    teacherName: 'Ban Cố vấn Chuyên môn STEM'
+    teacherName: 'Ban Cố vấn Chuyên môn STEM',
+    puzzleThemeTitle: STEM_THEME_TITLE,
+    puzzleImageUrl: STEM_ARTWORK_URL
   });
 
   const [questions, setQuestions] = useState<Question[]>(INITIAL_STEM_QUESTIONS);
@@ -46,6 +49,8 @@ export default function App() {
   // Student Session State
   const [studentName, setStudentName] = useState<string>('');
   const [completedRoundIndexes, setCompletedRoundIndexes] = useState<number[]>([]); // Rounds where student answered correctly
+  const [unlockedPieceIds, setUnlockedPieceIds] = useState<number[]>([]); // Randomly unlocked piece IDs (1-9)
+  const [justUnlockedPieceId, setJustUnlockedPieceId] = useState<number | null>(null); // Most recently unlocked piece
   const [placedPieceIds, setPlacedPieceIds] = useState<number[]>([]); // Pieces manually assembled onto board by student
   const [roundIndex, setRoundIndex] = useState<number>(0); // 0 to 8
   const [currentPhase, setCurrentPhase] = useState<'challenge' | 'question'>('challenge');
@@ -92,8 +97,13 @@ export default function App() {
           dbService.getQuestionSets(),
           dbService.getActiveQuestionSetId()
         ]);
-        setSettings(savedSettings);
-        setPuzzlePieces(savedPieces);
+        const loadedSettings: TeacherSettingsConfig = {
+          ...savedSettings,
+          puzzleImageUrl: savedSettings.puzzleImageUrl || STEM_ARTWORK_URL,
+          puzzleThemeTitle: savedSettings.puzzleThemeTitle || STEM_THEME_TITLE
+        };
+        setSettings(loadedSettings);
+        setPuzzlePieces(savedPieces && savedPieces.length > 0 ? savedPieces : DEFAULT_PUZZLE_PIECES);
 
         // Determine questions from active question set
         const activeId = savedSettings.activeQuestionSetId || savedActiveSetId || 'set_lop3_tinhoc';
@@ -147,14 +157,13 @@ export default function App() {
   const handleStartGame = (name: string) => {
     setStudentName(name);
     setCompletedRoundIndexes([]);
+    setUnlockedPieceIds([]);
+    setJustUnlockedPieceId(null);
     setPlacedPieceIds([]);
     setRoundIndex(0);
     setCurrentPhase('challenge');
     setActiveView('play');
     setCompletedTimestamp(undefined);
-    if (!audioManager.getMuted()) {
-      audioManager.startBgm();
-    }
   };
 
   // Face challenge passed -> proceed to STEM question
@@ -162,13 +171,27 @@ export default function App() {
     setCurrentPhase('question');
   };
 
-  // Question correct -> award 1 placement turn, unlock piece selection, switch to assembly view!
+  // Question correct -> randomly unlock one piece from remaining locked pieces, switch to assembly view!
   const handleCorrectAnswer = () => {
     setCompletedRoundIndexes(prev => {
       if (prev.includes(roundIndex)) return prev;
       return [...prev, roundIndex];
     });
-    // Switch to Assembly Table so student can choose ANY 1 piece to place!
+
+    // Random piece unlock as requested by user
+    setUnlockedPieceIds(prev => {
+      const allPieceIds = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+      const remainingLocked = allPieceIds.filter(id => !prev.includes(id));
+      if (remainingLocked.length > 0) {
+        const randomIndex = Math.floor(Math.random() * remainingLocked.length);
+        const randomPiece = remainingLocked[randomIndex];
+        setJustUnlockedPieceId(randomPiece);
+        return [...prev, randomPiece];
+      }
+      return prev;
+    });
+
+    // Switch to Assembly Table so student can inspect and place the random piece!
     setActiveView('assembly');
   };
 
@@ -226,6 +249,8 @@ export default function App() {
   // Confirm Reset game back to round 1
   const handleConfirmReset = () => {
     setCompletedRoundIndexes([]);
+    setUnlockedPieceIds([]);
+    setJustUnlockedPieceId(null);
     setPlacedPieceIds([]);
     setRoundIndex(0);
     setCurrentPhase('challenge');
@@ -239,6 +264,8 @@ export default function App() {
     if (confirm('Em có muốn kết thúc phiên chơi hiện tại và quay lại màn hình chính không?')) {
       setStudentName('');
       setCompletedRoundIndexes([]);
+      setUnlockedPieceIds([]);
+      setJustUnlockedPieceId(null);
       setPlacedPieceIds([]);
       setRoundIndex(0);
       setCurrentPhase('challenge');
@@ -281,6 +308,34 @@ export default function App() {
     setIsMuted(nextMute);
   };
 
+  const handleUploadArtwork = async (url: string, name: string) => {
+    const updatedSettings: TeacherSettingsConfig = {
+      ...settings,
+      puzzleImageUrl: url,
+      puzzleThemeTitle: name || 'Ảnh tùy chọn'
+    };
+    setSettings(updatedSettings);
+    try {
+      await dbService.saveSettings(updatedSettings);
+    } catch (err) {
+      console.error('Failed to save custom artwork:', err);
+    }
+  };
+
+  const handleResetArtwork = async () => {
+    const updatedSettings: TeacherSettingsConfig = {
+      ...settings,
+      puzzleImageUrl: STEM_ARTWORK_URL,
+      puzzleThemeTitle: STEM_THEME_TITLE
+    };
+    setSettings(updatedSettings);
+    try {
+      await dbService.saveSettings(updatedSettings);
+    } catch (err) {
+      console.error('Failed to reset artwork:', err);
+    }
+  };
+
   // If student name not entered, show entry screen
   if (!studentName) {
     return (
@@ -313,21 +368,23 @@ export default function App() {
       <div className="fixed top-1/2 right-10 w-[550px] h-[450px] bg-indigo-500/12 rounded-full blur-[140px] pointer-events-none -z-10" />
       <div className="fixed bottom-10 left-10 w-[500px] h-[400px] bg-sky-500/12 rounded-full blur-[140px] pointer-events-none -z-10" />
 
-      {/* Top Header */}
-      <GameHeader
-        studentName={studentName}
-        unlockedCount={placedPieceIds.length}
-        totalPieces={9}
-        isMuted={isMuted}
-        onToggleMute={handleToggleMute}
-        onOpenTeacherSettings={() => setIsTeacherSettingsOpen(true)}
-        onOpenCertificate={() => setIsCertificateOpen(true)}
-        isCompleted={isCompleted}
-        onExitStudentSession={handleExitSession}
-        currentView={activeView}
-        onSelectView={setActiveView}
-        onResetGame={() => setIsResetConfirmOpen(true)}
-      />
+      {/* Top Header - shown on challenge view; PuzzleBoard has its own dedicated top bar matching the design */}
+      {activeView === 'play' && !isCompleted && (
+        <GameHeader
+          studentName={studentName}
+          unlockedCount={placedPieceIds.length}
+          totalPieces={9}
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+          onOpenTeacherSettings={() => setIsTeacherSettingsOpen(true)}
+          onOpenCertificate={() => setIsCertificateOpen(true)}
+          isCompleted={isCompleted}
+          onExitStudentSession={handleExitSession}
+          currentView={activeView}
+          onSelectView={setActiveView}
+          onResetGame={() => setIsResetConfirmOpen(true)}
+        />
+      )}
 
       {/* Ambient Sci-Fi Side Panels on ultra-wide screens (2xl: >= 1536px) */}
       {activeView === 'play' && !isCompleted && (
@@ -429,33 +486,32 @@ export default function App() {
 
         {/* VIEW 2: INTERACTIVE PUZZLE ASSEMBLY TABLE */}
         {(activeView === 'assembly' || isCompleted) && (
-          <section className="animate-in fade-in duration-200 space-y-4 my-auto w-full">
-            {!isCompleted && (
-              <div className="flex items-center justify-between pb-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    audioManager.playClick();
-                    setActiveView('play');
-                  }}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#081533] hover:bg-[#0c1f4a] text-cyan-200 hover:text-white text-xs font-bold transition-colors cursor-pointer border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.2)]"
-                >
-                  <span>« Quay lại Thử Thách Khuôn Mặt (Vòng #{roundIndex + 1})</span>
-                </button>
-              </div>
-            )}
-
+          <section className="animate-in fade-in duration-200 my-auto w-full">
             <PuzzleBoard
               pieces={puzzlePieces}
+              unlockedPieceIds={unlockedPieceIds}
+              earnedPieceIds={unlockedPieceIds}
               placedPieceIds={placedPieceIds}
               onPlacePiece={handlePlacePiece}
               studentName={studentName}
               isCompleted={isCompleted}
               onOpenCertificate={() => setIsCertificateOpen(true)}
+              justUnlockedPieceId={justUnlockedPieceId}
               onContinueNextRound={handleContinueNextRound}
               onResetGame={() => setIsResetConfirmOpen(true)}
               nextRoundNumber={nextRoundNumber}
               placementTurnsAvailable={placementTurnsAvailable}
+              onBackToChallenge={() => {
+                audioManager.playClick();
+                setActiveView('play');
+              }}
+              isMuted={isMuted}
+              onToggleMute={handleToggleMute}
+              onOpenTeacherSettings={() => setIsTeacherSettingsOpen(true)}
+              customArtworkUrl={settings.puzzleImageUrl}
+              themeTitle={settings.puzzleThemeTitle || STEM_THEME_TITLE}
+              onUploadArtwork={handleUploadArtwork}
+              onResetArtwork={handleResetArtwork}
             />
           </section>
         )}

@@ -1,4 +1,5 @@
 import { COMPUTER_LAB_ARTWORK_URL } from './computerLabArt';
+import { STEM_ARTWORK_URL, STEM_THEME_TITLE } from './stemArtwork';
 
 // Master puzzle artworks for the Jigsaw Puzzle Board
 
@@ -29,6 +30,24 @@ const ROBOTICS_STEM_URL =
   'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=1200&auto=format&fit=crop';
 
 export const PUZZLE_THEMES: PuzzleTheme[] = [
+  {
+    id: 'stem-mystery-main',
+    title: STEM_THEME_TITLE,
+    artistOrTopic: 'Khoa học (Science), Công nghệ (Technology), Kỹ thuật (Engineering) & Toán học (Mathematics)',
+    description: 'Bức tranh chính thức STEM với chữ nghệ thuật rực rỡ và 4 huy hiệu khoa học: Bình thí nghiệm hóa học (Science), Chảo ăng-ten vệ tinh (Technology), Bánh răng cơ khí (Engineering) và Máy tính cầm tay (Mathematics).',
+    imageUrl: STEM_ARTWORK_URL,
+    pieceLabels: [
+      'Mảnh 1: Chữ S màu cam (Mô hình hạt nhân nguyên tử) & góc trên bên trái',
+      'Mảnh 2: Chữ T màu xanh lá (Mũi tên vươn cao) & các chấm liên kết',
+      'Mảnh 3: Chữ E màu xanh dương (Bánh răng) & Chữ M vàng (Thước kẻ đo)',
+      'Mảnh 4: Huy hiệu SCIENCE (Bình hóa học tam giác chứa dung dịch tím sủi bọt)',
+      'Mảnh 5: Huy hiệu TECHNOLOGY (Chảo ăng-ten vệ tinh thu phát sóng)',
+      'Mảnh 6: Huy hiệu ENGINEERING (Cụm bánh răng cơ khí công nghiệp)',
+      'Mảnh 7: Huy hiệu MATHEMATICS (Máy tính kỹ thuật số bỏ túi & phím số)',
+      'Mảnh 8: Thước đo centimet trên chân chữ M & Chữ MATHEMATICS vàng',
+      'Mảnh 9: Khung chữ định danh chuyên đề STEM hoàn chỉnh'
+    ]
+  },
   {
     id: 'future-computer-lab',
     title: 'Phòng thực hành Tin học tương lai',

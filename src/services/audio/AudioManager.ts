@@ -14,13 +14,10 @@ class AudioManager {
       const savedMute = localStorage.getItem('face_challenge_muted');
       this.isMuted = savedMute === 'true';
 
-      // Attach user interaction listener to resume audio context if suspended
+      // Attach user interaction listener to resume audio context if suspended (BGM removed per user request)
       const resumeListener = () => {
         if (this.ctx && this.ctx.state === 'suspended') {
           this.ctx.resume().catch(() => {});
-        }
-        if (!this.isMuted && !this.isBgmActive) {
-          this.startBgm();
         }
       };
       window.addEventListener('click', resumeListener, { once: true });
@@ -52,146 +49,17 @@ class AudioManager {
     if (typeof window !== 'undefined') {
       localStorage.setItem('face_challenge_muted', String(this.isMuted));
     }
-
-    if (this.isMuted) {
-      if (this.bgmGainNode && this.ctx) {
-        this.bgmGainNode.gain.setValueAtTime(0, this.ctx.currentTime);
-      }
-    } else {
-      if (this.bgmGainNode && this.ctx) {
-        this.bgmGainNode.gain.setValueAtTime(0.065, this.ctx.currentTime);
-      }
-      if (!this.isBgmActive) {
-        this.startBgm();
-      }
-    }
-
     return this.isMuted;
   }
 
   // ==========================================
-  // BACKGROUND MUSIC (BGM) PROCEDURAL SYNTH
+  // BACKGROUND MUSIC (BGM) - DISABLED
+  // (Huỷ bỏ hoàn toàn âm thanh nền nhẹ nhàng theo yêu cầu người dùng,
+  // chỉ giữ lại âm thanh hiệu ứng khi click, chọn đáp án hoặc thao tác)
   // ==========================================
-  // Ambient, soothing, uplifting chord progression (Cmaj9 - Am9 - Fmaj7 - Gsus4)
   startBgm() {
-    if (this.isBgmActive) return;
-    const ctx = this.getContext();
-    if (!ctx) return;
-
-    this.isBgmActive = true;
-
-    // Master BGM Gain
-    this.bgmGainNode = ctx.createGain();
-    this.bgmGainNode.gain.setValueAtTime(this.isMuted ? 0 : 0.065, ctx.currentTime);
-    this.bgmGainNode.connect(ctx.destination);
-
-    // Warm chord progression frequencies [root, third, fifth, seventh/ninth]
-    const chords = [
-      // Cmaj9
-      [130.81, 196.00, 246.94, 329.63, 293.66],
-      // Am9
-      [110.00, 164.81, 196.00, 261.63, 246.94],
-      // Fmaj7
-      [87.31, 130.81, 174.61, 220.00, 261.63],
-      // Gsus4 -> G
-      [98.00, 146.83, 196.00, 261.63, 293.66]
-    ];
-
-    const chordDuration = 5.0; // 5 seconds per chord
-
-    const playNextPadChord = () => {
-      if (!this.isBgmActive || !this.bgmGainNode) return;
-      const curCtx = this.getContext();
-      if (!curCtx) return;
-
-      const chord = chords[this.currentChordIndex % chords.length];
-      this.currentChordIndex++;
-
-      const now = curCtx.currentTime;
-
-      // Filter for warm soft pad feel
-      const filter = curCtx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(650, now);
-      filter.frequency.exponentialRampToValueAtTime(850, now + chordDuration * 0.5);
-      filter.frequency.exponentialRampToValueAtTime(650, now + chordDuration);
-
-      const chordGain = curCtx.createGain();
-      // Gentle attack and release
-      chordGain.gain.setValueAtTime(0.001, now);
-      chordGain.gain.linearRampToValueAtTime(0.35, now + 1.2);
-      chordGain.gain.setValueAtTime(0.35, now + chordDuration - 1.2);
-      chordGain.gain.linearRampToValueAtTime(0.001, now + chordDuration);
-
-      filter.connect(chordGain);
-      chordGain.connect(this.bgmGainNode);
-
-      // Create oscillators for chord
-      chord.forEach((freq) => {
-        try {
-          const osc = curCtx.createOscillator();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(freq, now);
-
-          // Subtle slow chorus detune
-          osc.detune.setValueAtTime((Math.random() - 0.5) * 8, now);
-
-          osc.connect(filter);
-          osc.start(now);
-          osc.stop(now + chordDuration);
-        } catch {}
-      });
-    };
-
-    // Soft pentatonic melodic kalimba/bell chimes
-    const pentatonicScales = [
-      [523.25, 659.25, 783.99, 987.77, 1046.50, 1174.66], // C major pentatonic / lydian
-      [440.00, 523.25, 659.25, 783.99, 880.00, 1046.50],  // A minor pentatonic
-      [349.23, 440.00, 523.25, 659.25, 698.46, 880.00],   // F major
-      [392.00, 493.88, 587.33, 659.25, 783.99, 987.77]    // G major
-    ];
-
-    const playRandomChime = () => {
-      if (!this.isBgmActive || !this.bgmGainNode || this.isMuted) return;
-      const curCtx = this.getContext();
-      if (!curCtx) return;
-
-      const scale = pentatonicScales[(this.currentChordIndex - 1 + pentatonicScales.length) % pentatonicScales.length];
-      const noteFreq = scale[Math.floor(Math.random() * scale.length)];
-      const now = curCtx.currentTime;
-
-      try {
-        const osc = curCtx.createOscillator();
-        const gain = curCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(noteFreq, now);
-
-        gain.gain.setValueAtTime(0.001, now);
-        gain.gain.exponentialRampToValueAtTime(0.18, now + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-
-        osc.connect(gain);
-        gain.connect(this.bgmGainNode);
-
-        osc.start(now);
-        osc.stop(now + 1.2);
-      } catch {}
-    };
-
-    // Trigger first chord immediately
-    playNextPadChord();
-
-    // Schedule chord transitions
-    this.bgmTimer = setInterval(() => {
-      playNextPadChord();
-    }, chordDuration * 1000 - 200);
-
-    // Schedule gentle bell chimes at musical intervals
-    this.bgmArpTimer = setInterval(() => {
-      if (Math.random() > 0.3) {
-        playRandomChime();
-      }
-    }, 1800);
+    // Intentionally no-op to cancel gentle ambient background loop
+    this.stopBgm();
   }
 
   stopBgm() {
@@ -454,25 +322,45 @@ class AudioManager {
     } catch {}
   }
 
+  // Soft, pleasant wooden block tap when dropping onto the wrong slot (NO electrical buzz)
   playWrongDrop() {
     if (this.isMuted) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
     try {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(180, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.15);
+      const now = ctx.currentTime;
+      // Gentle wooden knock 1
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(140, now);
+      osc1.frequency.exponentialRampToValueAtTime(70, now + 0.08);
 
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      gain1.gain.setValueAtTime(0.001, now);
+      gain1.gain.linearRampToValueAtTime(0.12, now + 0.01);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.15);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.08);
+
+      // Gentle wooden knock 2 (subtle rebound)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(110, now + 0.06);
+      osc2.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+
+      gain2.gain.setValueAtTime(0.001, now + 0.06);
+      gain2.gain.linearRampToValueAtTime(0.08, now + 0.07);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.06);
+      osc2.stop(now + 0.12);
     } catch {}
   }
 

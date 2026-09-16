@@ -1,29 +1,30 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  Sparkles,
+  Puzzle,
+  User,
   RotateCcw,
-  Eye,
-  EyeOff,
-  Lightbulb,
-  CheckCircle2,
+  Volume2,
+  VolumeX,
+  Settings,
   Trophy,
-  Shuffle,
-  Flame,
+  Sparkles,
+  MousePointerClick,
+  Image as ImageIcon,
+  Search,
+  Check,
   Lock,
-  ArrowRight,
-  ShieldAlert,
-  Cpu,
-  Layers
+  Upload,
+  Home,
+  CheckCircle2
 } from 'lucide-react';
 import { PuzzlePiece } from '../types';
-import { buildJigsawPieces, JigsawPiecePathInfo } from '../utils/jigsawGeometry';
-import { PUZZLE_THEMES, DEFAULT_PUZZLE_THEME, PuzzleTheme } from '../data/puzzleThemes';
 import { audioManager } from '../services/audio/AudioManager';
+import { buildJigsawPieces, JigsawPiecePathInfo } from '../utils/jigsawGeometry';
+import { STEM_ARTWORK_URL, STEM_THEME_TITLE } from '../data/stemArtwork';
 
 export interface PuzzleBoardProps {
-  pieces: PuzzlePiece[];
+  pieces?: PuzzlePiece[];
   earnedPieceIds?: number[];
   unlockedPieceIds?: number[];
   placedPieceIds?: number[];
@@ -37,789 +38,659 @@ export interface PuzzleBoardProps {
   onResetGame?: () => void;
   nextRoundNumber?: number;
   placementTurnsAvailable?: number;
+  onBackToChallenge?: () => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
+  onOpenTeacherSettings?: () => void;
+  customArtworkUrl?: string;
+  themeTitle?: string;
+  onUploadArtwork?: (url: string, name: string) => void;
+  onResetArtwork?: () => void;
 }
 
-const PuzzleBoardComponent: React.FC<PuzzleBoardProps> = ({
-  pieces,
+const BOARD_WIDTH = 1024;
+const BOARD_HEIGHT = 683;
+
+export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
+  pieces = [],
   earnedPieceIds,
   unlockedPieceIds,
   placedPieceIds = [],
-  unplacedPieceIds,
   onPlacePiece,
   studentName,
-  isCompleted,
+  isCompleted: globalIsCompleted,
   onOpenCertificate,
   justUnlockedPieceId,
   onContinueNextRound,
   onResetGame,
-  nextRoundNumber,
-  placementTurnsAvailable
+  onBackToChallenge,
+  isMuted = false,
+  onToggleMute,
+  onOpenTeacherSettings,
+  customArtworkUrl,
+  themeTitle = STEM_THEME_TITLE,
+  onUploadArtwork,
+  onResetArtwork
 }) => {
-  const totalPieces = 9;
+  const artworkUrl = customArtworkUrl || STEM_ARTWORK_URL;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
+  const [recentlyPlacedPieceId, setRecentlyPlacedPieceId] = useState<number | null>(null);
 
-  // Normalized placed list
-  const placed = useMemo(() => {
-    if (placedPieceIds && Array.isArray(placedPieceIds)) return placedPieceIds;
-    return [];
-  }, [placedPieceIds]);
-
-  // Compute 9 authentic interlocking jigsaw paths (810 x 540 coordinate space, 3x3)
-  const jigsawPaths: JigsawPiecePathInfo[] = useMemo(() => {
-    return buildJigsawPieces({ width: 810, height: 540, rows: 3, cols: 3 });
+  // Build the 9 authentic interlocking jigsaw puzzle piece definitions (3 rows x 3 columns)
+  const jigsawPieces = useMemo<JigsawPiecePathInfo[]>(() => {
+    return buildJigsawPieces({
+      width: BOARD_WIDTH,
+      height: BOARD_HEIGHT,
+      rows: 3,
+      cols: 3
+    });
   }, []);
 
-  // Current active theme
-  const [selectedThemeId] = useState<string>(DEFAULT_PUZZLE_THEME.id);
-  const currentTheme: PuzzleTheme = useMemo(() => {
-    return PUZZLE_THEMES.find(t => t.id === selectedThemeId) || DEFAULT_PUZZLE_THEME;
-  }, [selectedThemeId]);
+  // Compute all pieces that the student has earned/unlocked
+  const effectiveUnlockedIds = useMemo<number[]>(() => {
+    if (unlockedPieceIds && unlockedPieceIds.length > 0) {
+      return Array.from(new Set([...unlockedPieceIds, ...placedPieceIds]));
+    }
+    if (earnedPieceIds && earnedPieceIds.length > 0) {
+      return Array.from(new Set([...earnedPieceIds, ...placedPieceIds]));
+    }
+    const fromPieces = pieces.filter(p => p.unlocked).map(p => p.position || p.id);
+    if (fromPieces.length > 0) {
+      return Array.from(new Set([...fromPieces, ...placedPieceIds]));
+    }
+    // Default: at least piece 1 or placed pieces
+    return placedPieceIds.length > 0 ? placedPieceIds : [1];
+  }, [unlockedPieceIds, earnedPieceIds, placedPieceIds, pieces]);
 
-  // Master artwork image URL
-  const masterImageUrl = useMemo(() => {
-    return currentTheme.imageUrl;
-  }, [currentTheme]);
+  // Pieces that are unlocked but not yet placed on the board
+  const unplacedUnlockedIds = useMemo<number[]>(() => {
+    return effectiveUnlockedIds.filter(id => !placedPieceIds.includes(id));
+  }, [effectiveUnlockedIds, placedPieceIds]);
 
-  // User UI controls
-  const [showNumbers, setShowNumbers] = useState<boolean>(false);
-  const [hintActive, setHintActive] = useState<boolean>(false);
-  const [shakeSocketId, setShakeSocketId] = useState<number | null>(null);
-  const [lockWarning, setLockWarning] = useState<string | null>(null);
+  // Selected piece for inspection & placement
+  const [activePieceId, setActivePieceId] = useState<number>(() => {
+    if (justUnlockedPieceId && !placedPieceIds.includes(justUnlockedPieceId)) {
+      return justUnlockedPieceId;
+    }
+    if (unplacedUnlockedIds.length > 0) {
+      return unplacedUnlockedIds[0];
+    }
+    return 1;
+  });
 
-  // Tray order & shuffle state (all 9 pieces)
-  const [trayOrder, setTrayOrder] = useState<number[]>(() => [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  // Track wrong slot shake animation
+  const [shakingSlotId, setShakingSlotId] = useState<number | null>(null);
 
-  // Selected piece in tray
-  const [selectedPieceId, setSelectedPieceId] = useState<number | null>(null);
-
-  // Dragging state
-  const [draggingPieceId, setDraggingPieceId] = useState<number | null>(null);
-
-  // Turns available: how many pieces the student is permitted to place right now
-  const availableTurns = placementTurnsAvailable !== undefined
-    ? placementTurnsAvailable
-    : Math.max(0, 9 - placed.length);
-
-  // Remaining unplaced count
-  const remainingCount = totalPieces - placed.length;
-
-  // Automatically select piece when student opens tray or places a piece
+  // When a new piece is unlocked randomly, automatically focus on it!
   useEffect(() => {
-    if (selectedPieceId && !placed.includes(selectedPieceId)) {
-      // Current selected piece is still valid & unplaced
+    if (justUnlockedPieceId && !placedPieceIds.includes(justUnlockedPieceId)) {
+      setActivePieceId(justUnlockedPieceId);
+    } else if (!effectiveUnlockedIds.includes(activePieceId) && unplacedUnlockedIds.length > 0) {
+      setActivePieceId(unplacedUnlockedIds[0]);
+    }
+  }, [justUnlockedPieceId, unplacedUnlockedIds, effectiveUnlockedIds, activePieceId, placedPieceIds]);
+
+  // Active jigsaw geometry definition
+  const activeJigsawPiece = useMemo(() => {
+    return jigsawPieces.find(p => p.id === activePieceId) || jigsawPieces[0];
+  }, [jigsawPieces, activePieceId]);
+
+  // Solved state: all 9 pieces placed on the board
+  const isAllSolved = globalIsCompleted || placedPieceIds.length >= 9;
+
+  // File Upload Handler for custom puzzle artwork
+  const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Vui lòng chọn một tệp hình ảnh hợp lệ (PNG, JPG, JPEG, WEBP, GIF)');
       return;
     }
-    // Otherwise automatically select the first unplaced piece in tray
-    const nextUnplaced = trayOrder.find(id => !placed.includes(id)) ?? null;
-    setSelectedPieceId(nextUnplaced);
-  }, [placed, selectedPieceId, trayOrder]);
 
-  // Shuffle tray pieces
-  const handleShuffleTray = () => {
-    audioManager.playClick();
-    const shuffled = [...trayOrder].sort(() => Math.random() - 0.5);
-    setTrayOrder(shuffled);
-  };
-
-  // Toggle show numbers
-  const handleToggleNumbers = () => {
-    audioManager.playClick();
-    setShowNumbers(prev => !prev);
-  };
-
-  // Toggle socket hint
-  const handleToggleHint = () => {
-    audioManager.playClick();
-    setHintActive(prev => !prev);
-    if (!hintActive) {
-      setTimeout(() => setHintActive(false), 4000);
-    }
-  };
-
-  // Attempt placement: player is allowed to place any valid unplaced piece when turns are available!
-  const handleAttemptPlace = (targetSocketId: number) => {
-    if (!selectedPieceId) {
-      if (placed.length < totalPieces) {
-        setLockWarning(`Bạn hãy nhấp chọn một mảnh ghép trong khay trước nhé!`);
-        setTimeout(() => setLockWarning(null), 3000);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        const cleanTitle = file.name.replace(/\.[^/.]+$/, "");
+        if (onUploadArtwork) {
+          onUploadArtwork(dataUrl, cleanTitle);
+        }
+        audioManager.playSuccess();
       }
-      return;
-    }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
-    // Security check: cannot re-place an already placed piece
-    if (placed.includes(selectedPieceId)) {
-      setLockWarning(`Mảnh #${selectedPieceId} đã được lắp vào tranh rồi!`);
-      setTimeout(() => setLockWarning(null), 3000);
-      return;
+  // Drag and Drop files onto puzzle board
+  const handleBoardDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      setIsDraggingFile(true);
     }
+  };
 
-    // Check placement allowance for current round
-    if (availableTurns <= 0) {
-      audioManager.playWrongDrop();
-      setLockWarning(
-        `Bạn đã dùng xong lượt ghép của vòng này rồi! Hãy làm tiếp Thử thách Vòng #${nextRoundNumber || (placed.length + 1)} để nhận thêm lượt chọn mảnh nhé.`
-      );
-      setTimeout(() => setLockWarning(null), 4000);
-      return;
+  const handleBoardDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingFile(false);
+  };
+
+  const handleBoardDrop = (e: React.DragEvent) => {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      setIsDraggingFile(false);
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          if (dataUrl) {
+            const cleanTitle = file.name.replace(/\.[^/.]+$/, "");
+            if (onUploadArtwork) {
+              onUploadArtwork(dataUrl, cleanTitle);
+            }
+            audioManager.playSuccess();
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
+  };
 
-    if (selectedPieceId === targetSocketId) {
-      // CORRECT FIT!
+  // Manual placement into correct slot
+  const handlePlaceIntoSlot = (slotId: number) => {
+    // Already placed slot
+    if (placedPieceIds.includes(slotId)) return;
+
+    // Check if the student is placing the active piece into its correct matching slot
+    if (slotId === activePieceId) {
       audioManager.playPieceSnap();
+      setRecentlyPlacedPieceId(slotId);
       if (onPlacePiece) {
-        onPlacePiece(selectedPieceId);
+        onPlacePiece(activePieceId);
       }
-      setHintActive(false);
-      setLockWarning(null);
 
-      if (placed.length + 1 >= totalPieces) {
-        audioManager.playVictory();
-        try {
-          confetti({
-            particleCount: 120,
-            spread: 90,
-            origin: { y: 0.6 }
-          });
-        } catch {}
+      // Automatically select the next unplaced unlocked piece if available
+      const remaining = unplacedUnlockedIds.filter(id => id !== activePieceId);
+      if (remaining.length > 0) {
+        setActivePieceId(remaining[0]);
       }
-    } else {
-      // MISMATCH!
-      audioManager.playWrongDrop();
-      setShakeSocketId(targetSocketId);
-      setTimeout(() => setShakeSocketId(null), 800);
-      setLockWarning(
-        `Mảnh #${selectedPieceId} chưa khớp với ô #${targetSocketId}. Bạn hãy quan sát kỹ mộng răng cưa hoặc bật gợi ý ô để thử lại nhé!`
-      );
-      setTimeout(() => setLockWarning(null), 3500);
+
+      // Check if this was the 9th piece (completion)
+      if (placedPieceIds.length + 1 >= 9) {
+        setTimeout(() => {
+          audioManager.playVictory();
+          try {
+            confetti({
+              particleCount: 160,
+              spread: 90,
+              origin: { y: 0.55 },
+              colors: ['#06b6d4', '#22d3ee', '#fbbf24', '#ffffff']
+            });
+          } catch {}
+        }, 200);
+      }
+      return;
     }
+
+    // If student clicked on a slot for which they already own the piece, let them snap that piece directly!
+    if (effectiveUnlockedIds.includes(slotId)) {
+      setActivePieceId(slotId);
+      audioManager.playPieceSnap();
+      setRecentlyPlacedPieceId(slotId);
+      if (onPlacePiece) {
+        onPlacePiece(slotId);
+      }
+      return;
+    }
+
+    // WRONG SLOT: Mismatch! Shake slot and play soft wooden block knock (NO electrical buzz)
+    audioManager.playWrongDrop();
+    setShakingSlotId(slotId);
+    setTimeout(() => {
+      setShakingSlotId(null);
+    }, 400);
   };
 
-  // Path info for active selected piece
-  const activePathInfo = useMemo(() => {
-    if (selectedPieceId) {
-      return jigsawPaths.find(p => p.position === selectedPieceId) || null;
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', String(activePieceId));
+  };
+
+  const handleDropOnSlot = (e: React.DragEvent, slotId: number) => {
+    e.preventDefault();
+    const draggedId = Number(e.dataTransfer.getData('text/plain'));
+    if (draggedId === slotId && effectiveUnlockedIds.includes(draggedId)) {
+      handlePlaceIntoSlot(slotId);
+    } else {
+      audioManager.playWrongDrop();
+      setShakingSlotId(slotId);
+      setTimeout(() => setShakingSlotId(null), 400);
     }
-    const firstUnplaced = trayOrder.find(id => !placed.includes(id));
-    if (firstUnplaced) {
-      return jigsawPaths.find(p => p.position === firstUnplaced) || null;
-    }
-    return null;
-  }, [selectedPieceId, jigsawPaths, trayOrder, placed]);
+  };
 
   return (
     <div
-      id="puzzle-board-container"
-      className="w-full rounded-3xl p-4 sm:p-6 shadow-[0_20px_50px_rgba(0,0,0,0.6)] border-4 border-[#3d1f12] wood-board-chassis select-none relative text-amber-100"
+      id="wooden-desk-environment"
+      onDragOver={handleBoardDragOver}
+      onDragLeave={handleBoardDragLeave}
+      onDrop={handleBoardDrop}
+      className="wood-desk-surface relative w-full min-h-[700px] flex flex-col justify-between rounded-3xl p-3 sm:p-5 lg:p-6 overflow-hidden select-none border-2 border-[#452410] shadow-[0_20px_60px_rgba(0,0,0,0.95)] text-slate-100"
     >
-      {/* Wooden Frame Corner Accents */}
-      <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-amber-600/70 rounded-tl-sm pointer-events-none" />
-      <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-600/70 rounded-tr-sm pointer-events-none" />
-      <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-600/70 rounded-bl-sm pointer-events-none" />
-      <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-600/70 rounded-br-sm pointer-events-none" />
+      {/* Hidden File Input for Custom Puzzle Artwork */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={handleImageFileSelect}
+      />
 
-      {/* Top Telemetry Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-5 border-b border-amber-900/50">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-400 shadow-sm">
-            <Layers className="w-5 h-5 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-black text-amber-200 font-tech tracking-wide">
-                BÀN GHÉP TRANH GỖ TỰ NHIÊN
-              </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700 font-mono">
-                STEM MATRIX 3x3
-              </span>
-            </div>
-            <p className="text-xs text-amber-300/70">
-              Quan sát mộng ghép & vị trí, nhấp hoặc kéo thả mảnh vào khung tranh
-            </p>
-          </div>
-        </div>
-
-        {/* Real-time Progress HUD */}
-        <div className="flex items-center gap-2 text-xs font-mono">
-          <div className={`px-3 py-1.5 rounded-xl border font-bold flex items-center gap-1.5 shadow-sm transition-all ${
-            availableTurns > 0
-              ? 'bg-[#2a1708] border-amber-500 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/60'
-              : 'bg-[#24130b] border-amber-800/60 text-amber-400/70'
-          }`}>
-            {availableTurns > 0 ? (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-            ) : (
-              <span className="w-2 h-2 rounded-full bg-slate-500" />
-            )}
-            <span>
-              LƯỢT GHÉP: <strong>{availableTurns > 0 ? `${availableTurns} lượt` : 'Đã dùng hết'}</strong>
-            </span>
-          </div>
-          <div className="px-3 py-1.5 rounded-xl bg-[#142416] border border-emerald-700/80 text-emerald-300 font-bold flex items-center gap-1.5 shadow-sm">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>ĐÃ LẮP: <strong>{placed.length}/9</strong></span>
-          </div>
-        </div>
-      </div>
-
-      {/* Dynamic guidance banner */}
-      <div className="mb-5">
-        {availableTurns > 0 ? (
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-[#27140b] to-[#1a0c06] border-2 border-amber-500/70 flex items-center justify-between gap-3 shadow-lg animate-in fade-in">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-lg shadow-sm shrink-0 font-mono">
-                ★
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm font-black text-amber-200 uppercase tracking-wide">
-                  TẤT CẢ MẢNH GHÉP ĐÃ XUẤT HIỆN • BẠN ĐƯỢC CHỌN 1 MẢNH DUY NHẤT ĐỂ GHÉP
-                </div>
-                <div className="text-[11px] sm:text-xs text-amber-300/85 mt-0.5">
-                  Bạn không bắt buộc phải ghép theo thứ tự 1-8. Hãy nhấp chọn bất kỳ mảnh nào trong khay mà bạn muốn để ghép vào tranh!
-                </div>
-              </div>
-            </div>
-            <div className="hidden md:inline-flex px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/80 text-amber-300 text-xs font-bold shrink-0 font-mono">
-              {availableTurns} lượt chọn
-            </div>
-          </div>
-        ) : placed.length < totalPieces ? (
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-[#1c1008] to-[#150a04] border border-emerald-600/70 flex flex-wrap items-center justify-between gap-3 shadow-md animate-in fade-in">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-base shadow-sm shrink-0">
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm font-black text-emerald-300 uppercase tracking-wide">
-                  ĐÃ DÙNG XONG LƯỢT GHÉP VÒNG NÀY (ĐÃ LẮP {placed.length}/9 MẢNH)
-                </div>
-                <div className="text-[11px] sm:text-xs text-amber-200/80 mt-0.5">
-                  Hãy hoàn thành Thử thách Vòng #{nextRoundNumber || (placed.length + 1)} để nhận thêm 1 lượt chọn mảnh mới nhé!
-                </div>
-              </div>
-            </div>
-            {onContinueNextRound && (
-              <button
-                type="button"
-                onClick={onContinueNextRound}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs shadow-md transition-transform active:scale-95 cursor-pointer uppercase tracking-wider shrink-0"
-              >
-                <span>TIẾP TỤC VÒNG #{nextRoundNumber || (placed.length + 1)}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      {/* Warning Toast if clicking locked piece */}
-      {lockWarning && (
-        <div className="mb-4 p-3 rounded-2xl bg-amber-950/90 border-2 border-amber-500 text-amber-200 text-xs font-bold flex items-center gap-2.5 shadow-lg animate-in fade-in duration-200">
-          <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0" />
-          <span>{lockWarning}</span>
+      {/* Dragging Image Overlay Feedback */}
+      {isDraggingFile && (
+        <div className="absolute inset-0 z-50 bg-[#061838]/90 border-4 border-dashed border-cyan-400 rounded-3xl flex flex-col items-center justify-center gap-3 backdrop-blur-sm animate-fade-in pointer-events-none">
+          <Upload className="w-16 h-16 text-cyan-300 animate-bounce" />
+          <span className="text-xl sm:text-2xl font-black text-cyan-200 uppercase tracking-wider">
+            Thả ảnh vào đây để làm tranh ghép mới!
+          </span>
+          <span className="text-sm text-cyan-400">
+            Hỗ trợ PNG, JPG, JPEG, WEBP, GIF
+          </span>
         </div>
       )}
 
-      {/* 2-Column Main Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* ================= LEFT COLUMN: MẢNH GHÉP & KHAY CHỜ ================= */}
-        <div className="lg:col-span-4 xl:col-span-4 flex flex-col space-y-3.5">
-          {/* Header row: 🔥 MẢNH GHÉP LỘN XỘN | 🔀 Xáo lại | Còn 9 */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-amber-400 font-black text-xs uppercase tracking-wider font-tech">
-              <Flame className="w-4 h-4 text-amber-400 fill-amber-400" />
-              <span>MẢNH GHÉP LỘN XỘN</span>
-            </div>
+      {/* ================= DESK AMBIENT CORNER DECORATIONS (MATCHING REFERENCE IMAGE) ================= */}
+      {/* Top-Right: Notebook "PUZZLE LEARNING FUN!" & Green Leaves */}
+      <div className="absolute top-2 right-4 pointer-events-none opacity-40 lg:opacity-75 z-0 flex items-start gap-2">
+        <div className="transform rotate-12 text-right">
+          <div className="text-[11px] sm:text-xs font-black tracking-widest text-cyan-200/90 font-mono uppercase drop-shadow">
+            PUZZLE
+          </div>
+          <div className="text-[10px] sm:text-[11px] font-black tracking-widest text-cyan-300 font-mono uppercase drop-shadow">
+            LEARNING FUN!
+          </div>
+          <div className="text-[10px] text-cyan-400 font-mono">✦ ✦ ✦</div>
+        </div>
+      </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                id="btn-shuffle-tray"
-                onClick={handleShuffleTray}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#24130b] border border-amber-700/80 hover:bg-amber-900/60 text-amber-300 hover:text-amber-200 text-xs font-bold transition-all shadow-sm cursor-pointer active:scale-95"
-                title="Xáo trộn ngẫu nhiên thứ tự các mảnh trong khay"
-              >
-                <Shuffle className="w-3.5 h-3.5 text-amber-400" />
-                <span>Xáo lại</span>
-              </button>
+      {/* Bottom-Right: Notepad "Good Ideas Today!" */}
+      <div className="absolute bottom-3 right-4 pointer-events-none opacity-30 lg:opacity-60 z-0 text-right">
+        <div className="w-24 h-16 bg-[#f5efe6] rounded shadow-md transform rotate-[-6deg] p-1.5 text-stone-800 border border-stone-300">
+          <div className="text-[9px] font-bold text-stone-700 leading-tight">Good Ideas</div>
+          <div className="text-[9px] font-bold text-stone-700 leading-tight">Today!</div>
+          <div className="text-[14px] text-amber-500 text-center mt-1">☺</div>
+        </div>
+      </div>
 
-              <div className="px-2.5 py-1.5 rounded-xl bg-[#24130b] border border-amber-700/80 text-amber-300 text-xs font-bold font-mono shadow-sm">
-                Còn {remainingCount}
-              </div>
-            </div>
+      {/* Bottom-Left: Colored Pencils Accent */}
+      <div className="absolute bottom-2 left-4 pointer-events-none opacity-30 lg:opacity-60 z-0">
+        <div className="w-28 h-4 rounded-full bg-gradient-to-r from-red-600 via-amber-500 to-cyan-500 transform -rotate-12 shadow-md" />
+      </div>
+
+      {/* ================= 1. TOP HEADER & CONTROLS ================= */}
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#4d2813]/80">
+        {/* Left Action Controls */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Student Profile Badge */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#081830]/90 border border-cyan-400/80 shadow text-cyan-200 font-bold text-xs sm:text-sm">
+            <User className="w-4 h-4 text-cyan-400" />
+            <span>{studentName || 'Linh'}</span>
           </div>
 
-          {/* Active Piece Preview Card / Card Mảnh Đang Chọn */}
-          <motion.div
-            layout
-            whileHover={{ y: -3, transition: { duration: 0.2 } }}
-            className="rounded-2xl border-2 border-amber-500/90 bg-[#1c0e07] p-4 shadow-[0_0_25px_rgba(245,158,11,0.22)] flex flex-col space-y-3 relative overflow-hidden perspective-800"
-          >
-            {/* Top decorative amber glow & holographic light sheen */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/5 to-transparent -translate-x-full animate-holo-sheen pointer-events-none" />
-
-            {activePathInfo ? (
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`preview-piece-${activePathInfo.position}`}
-                  initial={{ opacity: 0, scale: 0.9, rotateX: 12 }}
-                  animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, rotateX: -12 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                  className="space-y-3 preserve-3d"
-                >
-                  {/* Top Badge: ✨ Mảnh bí ẩn */}
-                  <div className="flex items-center justify-between">
-                    <motion.div
-                      whileHover={{ scale: 1.05 }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#271309] border border-amber-600/70 text-amber-300 text-xs font-bold shadow-sm"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" style={{ animationDuration: '8s' }} />
-                      <span>Mảnh bí ẩn 3D</span>
-                    </motion.div>
-                    <span className="text-[11px] text-amber-400 font-mono font-bold">
-                      {placed.includes(activePathInfo.position) ? '✓ Đã lắp vào tranh' : `Vị trí #${activePathInfo.position}`}
-                    </span>
-                  </div>
-
-                  {/* Center Preview with authentic Jigsaw Cutout & 3D Levitation */}
-                  <motion.div
-                    animate={{
-                      y: [-3, 3, -3],
-                      rotateX: [2, -2, 2],
-                      rotateY: [-2, 2, -2]
-                    }}
-                    transition={{
-                      duration: 4,
-                      repeat: Infinity,
-                      ease: 'easeInOut'
-                    }}
-                    whileHover={{ scale: 1.04, rotateX: 6, rotateY: -6 }}
-                    className="w-full h-44 rounded-xl bg-[#120803] border border-amber-900/80 flex items-center justify-center relative overflow-hidden shadow-inner p-2 cursor-grab active:cursor-grabbing hover:border-amber-500/80 transition-colors transform-gpu preserve-3d"
-                    draggable={!placed.includes(activePathInfo.position)}
-                    onDragStart={e => {
-                      e.dataTransfer.setData('text/plain', String(activePathInfo.position));
-                      setSelectedPieceId(activePathInfo.position);
-                      setDraggingPieceId(activePathInfo.position);
-                    }}
-                    onDragEnd={() => setDraggingPieceId(null)}
-                  >
-                    <svg
-                      viewBox={`${activePathInfo.bounds.minX - 8} ${activePathInfo.bounds.minY - 8} ${
-                        activePathInfo.bounds.maxX - activePathInfo.bounds.minX + 16
-                      } ${activePathInfo.bounds.maxY - activePathInfo.bounds.minY + 16}`}
-                      className="w-auto h-36 max-w-full drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)] transition-transform"
-                    >
-                      <defs>
-                        <clipPath id={`active-preview-clip-${activePathInfo.position}`}>
-                          <path d={activePathInfo.pathD} />
-                        </clipPath>
-                      </defs>
-
-                      {/* Masked artwork image */}
-                      <g clipPath={`url(#active-preview-clip-${activePathInfo.position})`}>
-                        <image
-                          href={masterImageUrl}
-                          x="0"
-                          y="0"
-                          width="810"
-                          height="540"
-                          preserveAspectRatio="xMidYMid slice"
-                        />
-                      </g>
-
-                      {/* Glowing amber border */}
-                      <path
-                        d={activePathInfo.pathD}
-                        fill="none"
-                        stroke="#f59e0b"
-                        strokeWidth="3"
-                        className="filter drop-shadow-[0_0_8px_rgba(245,158,11,0.9)]"
-                      />
-                    </svg>
-                  </motion.div>
-
-                  {/* Button inside the card below preview */}
-                  <motion.button
-                    id="btn-drag-hint"
-                    whileHover={{ scale: 1.02, y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      if (availableTurns <= 0) {
-                        if (onContinueNextRound) onContinueNextRound();
-                      } else {
-                        if (hintActive) {
-                          setHintActive(false);
-                        } else {
-                          handleToggleHint();
-                        }
-                      }
-                    }}
-                    className={`w-full py-2.5 px-3 rounded-xl border font-bold text-xs text-center cursor-pointer transition-colors shadow-md flex items-center justify-center gap-2 ${
-                      availableTurns > 0
-                        ? 'bg-[#140803] hover:bg-[#1f0d06] text-amber-200 border-amber-800/80'
-                        : 'bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-200 border-emerald-600/80'
-                    }`}
-                  >
-                    {availableTurns > 0 ? (
-                      <span>
-                        {hintActive ? 'Đang bật gợi ý vị trí ô trên tranh' : `Kéo thả hoặc Nhấp ô #${activePathInfo.position} để ghép`}
-                      </span>
-                    ) : (
-                      <span>
-                        Đã dùng hết lượt vòng này • Tiếp tục Vòng #{nextRoundNumber || (placed.length + 1)} »
-                      </span>
-                    )}
-                  </motion.button>
-                </motion.div>
-              </AnimatePresence>
-            ) : (
-              /* When all 9 pieces are placed */
-              <div className="py-6 px-3 text-center space-y-3">
-                <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-emerald-600 flex items-center justify-center text-emerald-400 shadow-sm">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-amber-200 font-tech">
-                    ĐÃ LẮP XONG TẤT CẢ CÁC MẢNH GHÉP!
-                  </h4>
-                  <p className="text-xs text-amber-300/80 mt-1">
-                    Bạn đã tự tay ghép thành công toàn bộ {placed.length}/9 mảnh vào tranh.
-                  </p>
-                </div>
-
-                {placed.length < totalPieces && onContinueNextRound && (
-                  <button
-                    onClick={onContinueNextRound}
-                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs shadow-md transition-transform active:scale-95 cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wide"
-                  >
-                    <span>TIẾP TỤC THỬ THÁCH VÒNG #{nextRoundNumber || (placed.length + 1)}</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            )}
-          </motion.div>
-
-          {/* Observation Hint Card (GỢI Ý QUAN SÁT) */}
-          {activePathInfo && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              whileHover={{ y: -2, scale: 1.01 }}
-              transition={{ duration: 0.2 }}
-              className="p-3 rounded-xl bg-[#1e0f08] border border-amber-950 space-y-1.5 shadow-sm"
+          {/* Reset / Chơi lại */}
+          {onResetGame && (
+            <button
+              id="btn-puzzle-reset"
+              type="button"
+              onClick={() => {
+                audioManager.playClick();
+                onResetGame();
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0d2242] hover:bg-[#13325e] border border-cyan-500/70 text-cyan-300 font-bold text-xs sm:text-sm shadow transition-all cursor-pointer active:scale-95"
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-amber-400 font-black text-xs uppercase font-tech">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-                  <span>GỢI Ý QUAN SÁT:</span>
-                </div>
-                <span className="px-2.5 py-0.5 rounded-lg bg-[#064e3b] border border-emerald-500 text-emerald-300 text-xs font-bold shadow-sm">
-                  {activePathInfo.categoryBadge}
-                </span>
-              </div>
-              <p className="text-[#fef3c7] text-xs leading-relaxed font-normal">
-                {activePathInfo.categoryHint}
-              </p>
-            </motion.div>
+              <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Chơi lại</span>
+            </button>
           )}
 
-          {/* Tray Thumbnail Grid - All pieces appear, player can pick any unplaced piece */}
-          <div className="space-y-2 pt-1">
-            <div className="text-xs text-amber-400/90 font-mono italic flex items-center justify-between">
-              <span>Khay mảnh ghép (Chọn 1 mảnh bất kỳ):</span>
-              <span className="text-[11px] text-amber-300 font-mono">
-                Còn {remainingCount}/9 mảnh
+          {/* Sound Toggle */}
+          {onToggleMute && (
+            <button
+              id="btn-puzzle-mute"
+              type="button"
+              onClick={() => {
+                audioManager.playClick();
+                onToggleMute();
+              }}
+              className="w-8 h-8 rounded-full bg-[#0d2242] hover:bg-[#13325e] border border-cyan-500/60 flex items-center justify-center text-cyan-300 transition-all cursor-pointer shadow active:scale-95"
+              title={isMuted ? 'Bật âm thanh' : 'Tắt âm thanh'}
+            >
+              {isMuted ? (
+                <VolumeX className="w-4 h-4 text-slate-400" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-cyan-400" />
+              )}
+            </button>
+          )}
+
+          {/* Teacher Settings */}
+          {onOpenTeacherSettings && (
+            <button
+              id="btn-puzzle-settings"
+              type="button"
+              onClick={() => {
+                audioManager.playClick();
+                onOpenTeacherSettings();
+              }}
+              className="w-8 h-8 rounded-full bg-[#0d2242] hover:bg-[#13325e] border border-cyan-500/60 flex items-center justify-center text-cyan-300 transition-all cursor-pointer shadow active:scale-95"
+              title="Cài đặt giáo viên"
+            >
+              <Settings className="w-4 h-4 text-cyan-400" />
+            </button>
+          )}
+        </div>
+
+        {/* Center: Title "Thử thách ghép tranh bí ẩn" */}
+        <div className="flex items-center gap-2">
+          <Puzzle className="w-5 h-5 text-cyan-400 fill-cyan-400/20" />
+          <h1 className="text-base sm:text-xl font-black uppercase tracking-wider text-cyan-300 drop-shadow-[0_0_12px_rgba(6,182,212,0.5)]">
+            Thử thách ghép tranh bí ẩn
+          </h1>
+          <span className="ml-1 px-2.5 py-0.5 rounded-full bg-[#07162b] border border-cyan-400/50 text-[11px] font-mono font-bold text-cyan-300 shadow">
+            {placedPieceIds.length}/9
+          </span>
+        </div>
+
+        {/* Right Actions: Upload Photo & Return to Home Challenge */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Upload Button */}
+          <button
+            id="btn-upload-puzzle-image-top"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#081830] hover:bg-[#0f2a52] border border-cyan-400 text-cyan-300 hover:text-white font-bold text-xs sm:text-sm shadow transition-all cursor-pointer active:scale-95"
+            title="Tải ảnh riêng của bạn làm tranh ghép (PNG, JPG, WEBP)"
+          >
+            <Upload className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Tải ảnh lên</span>
+          </button>
+
+          {/* Return to Home / Next Challenge */}
+          <button
+            id="btn-nav-home-challenge"
+            type="button"
+            onClick={() => {
+              audioManager.playClick();
+              if (onContinueNextRound) {
+                onContinueNextRound();
+              } else if (onBackToChallenge) {
+                onBackToChallenge();
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-slate-950 font-black text-xs sm:text-sm shadow transition-all cursor-pointer active:scale-95"
+            title="Quay về màn hình thử thách khuôn mặt"
+          >
+            <Home className="w-4 h-4" />
+            <span>Về Home Thử Thách</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ================= 2. MAIN WORKSPACE (LEFT SCI-FI CYBER CARD + RIGHT WOODEN JIGSAW BOARD) ================= */}
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 my-auto items-center py-3">
+        {/* ================= LEFT COLUMN: SCI-FI NEON CYAN CARD (MATCHING REFERENCE IMAGE) ================= */}
+        <div className="lg:col-span-4 flex flex-col justify-center items-center w-full max-w-[360px] mx-auto">
+          <div className="w-full rounded-3xl p-4 bg-[#051124]/95 border-2 border-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.45)] flex flex-col space-y-3">
+            {/* Top Badge: [🧩 Mảnh bí ẩn] + ✨ */}
+            <div className="flex items-center justify-between">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#0b2447] border border-cyan-400/80 text-cyan-200 text-xs sm:text-sm font-bold shadow-[0_0_12px_rgba(6,182,212,0.3)]">
+                <Puzzle className="w-4 h-4 text-cyan-400" />
+                <span>Mảnh bí ẩn</span>
+              </div>
+              <Sparkles className="w-4 h-4 text-cyan-300 animate-pulse" />
+            </div>
+
+            {/* Active Jigsaw Piece Preview Box with Tech Corner Brackets (L shapes) */}
+            <div
+              draggable={!placedPieceIds.includes(activePieceId)}
+              onDragStart={handleDragStart}
+              className="relative w-full aspect-[4/3] rounded-2xl bg-[#091830] border border-cyan-500/40 flex items-center justify-center p-3 overflow-hidden shadow-inner group"
+            >
+              {/* 4 White Tech Corner Brackets */}
+              <div className="absolute top-2.5 left-2.5 w-3.5 h-3.5 border-t-2 border-l-2 border-cyan-300 pointer-events-none" />
+              <div className="absolute top-2.5 right-2.5 w-3.5 h-3.5 border-t-2 border-r-2 border-cyan-300 pointer-events-none" />
+              <div className="absolute bottom-2.5 left-2.5 w-3.5 h-3.5 border-b-2 border-l-2 border-cyan-300 pointer-events-none" />
+              <div className="absolute bottom-2.5 right-2.5 w-3.5 h-3.5 border-b-2 border-r-2 border-cyan-300 pointer-events-none" />
+
+              {/* Jigsaw Cutout of Active Piece */}
+              {activeJigsawPiece && (
+                <svg
+                  viewBox={`${activeJigsawPiece.bounds.minX - 8} ${activeJigsawPiece.bounds.minY - 8} ${
+                    activeJigsawPiece.bounds.maxX - activeJigsawPiece.bounds.minX + 16
+                  } ${activeJigsawPiece.bounds.maxY - activeJigsawPiece.bounds.minY + 16}`}
+                  className="w-full h-full p-2 filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)] transition-transform group-hover:scale-105 cursor-grab active:cursor-grabbing"
+                >
+                  <defs>
+                    <clipPath id={`active-piece-preview-clip-${activeJigsawPiece.id}`}>
+                      <path d={activeJigsawPiece.pathD} />
+                    </clipPath>
+                  </defs>
+
+                  {/* Clipped image of the puzzle piece */}
+                  <image
+                    href={artworkUrl}
+                    x="0"
+                    y="0"
+                    width={BOARD_WIDTH}
+                    height={BOARD_HEIGHT}
+                    preserveAspectRatio="none"
+                    clipPath={`url(#active-piece-preview-clip-${activeJigsawPiece.id})`}
+                  />
+
+                  {/* Interlocking boundary stroke */}
+                  <path
+                    d={activeJigsawPiece.pathD}
+                    fill="none"
+                    stroke="#06b6d4"
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+
+              {placedPieceIds.includes(activePieceId) && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/90 border border-emerald-400 text-emerald-300 text-xs font-bold">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" /> Đã ở trên bàn ghép
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Action Button: [👆 Kéo thả hoặc Nhấp ô để ghép] */}
+            <button
+              id="btn-active-piece-action"
+              type="button"
+              onClick={() => handlePlaceIntoSlot(activePieceId)}
+              disabled={placedPieceIds.includes(activePieceId)}
+              className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm tracking-wide transition-all shadow cursor-pointer border flex items-center justify-center gap-2 ${
+                placedPieceIds.includes(activePieceId)
+                  ? 'bg-[#0a1626] text-slate-500 border-slate-700 cursor-default'
+                  : 'bg-[#081e3a] hover:bg-[#0c2c54] border-cyan-400 text-cyan-300 hover:text-white shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-98'
+              }`}
+            >
+              <MousePointerClick className="w-4 h-4 text-cyan-400" />
+              <span>
+                {placedPieceIds.includes(activePieceId)
+                  ? 'Mảnh này đã ghép xong'
+                  : 'Kéo thả hoặc Nhấp ô để ghép'}
               </span>
+            </button>
+
+            {/* Observation Hint Card (GỢI Ý QUAN SÁT) */}
+            <div className="w-full rounded-xl p-2.5 bg-[#081b36]/90 border border-cyan-500/30 text-xs space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-amber-400 font-black tracking-wide text-[11px] flex items-center gap-1">
+                  <span>💡 GỢI Ý QUAN SÁT:</span>
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-cyan-950/90 border border-cyan-400 text-cyan-300 font-bold text-[10px]">
+                  {activeJigsawPiece.categoryBadge}
+                </span>
+              </div>
+              <div className="text-slate-300 text-[11px] leading-relaxed">
+                {activeJigsawPiece.categoryHint}
+              </div>
             </div>
 
-            {/* 3-Column Thumbnail Grid with 3D perspective */}
-            <div className="grid grid-cols-3 gap-2.5 max-h-[220px] overflow-y-auto pr-2 wood-tray-scrollbar perspective-800">
-              {trayOrder.map(pieceId => {
-                const isSelected = selectedPieceId === pieceId;
-                const isPlaced = placed.includes(pieceId);
-                const pathInfo = jigsawPaths.find(p => p.position === pieceId) || jigsawPaths[0];
+            {/* Tray of Other Pieces: Các mảnh khác trong khay (Xáo trộn ngẫu nhiên) */}
+            <div className="w-full pt-1">
+              <div className="flex items-center justify-between mb-1.5 px-1">
+                <span className="text-xs font-bold text-cyan-200">Các mảnh khác trong khay:</span>
+                <span className="text-[11px] text-slate-400 italic">(Xáo trộn ngẫu nhiên)</span>
+              </div>
 
-                return (
-                  <motion.button
-                    key={`tray-piece-${pieceId}`}
-                    id={`tray-piece-btn-${pieceId}`}
-                    layout
-                    whileHover={!isPlaced ? {
-                      scale: 1.08,
-                      y: -4,
-                      rotateX: 8,
-                      rotateY: -6,
-                      boxShadow: '0 12px 25px rgba(245, 158, 11, 0.45)',
-                      transition: { type: 'spring', stiffness: 450, damping: 20 }
-                    } : {}}
-                    whileTap={!isPlaced ? { scale: 0.94, y: 1 } : {}}
-                    animate={isSelected ? {
-                      y: [-2, 2, -2],
-                      transition: { repeat: Infinity, duration: 2.5, ease: 'easeInOut' }
-                    } : {}}
-                    onClick={() => {
-                      audioManager.playClick();
-                      setSelectedPieceId(pieceId);
-                    }}
-                    draggable={!isPlaced}
-                    onDragStart={e => {
-                      if (isPlaced) {
-                        e.preventDefault();
-                        return;
-                      }
-                      e.dataTransfer.setData('text/plain', String(pieceId));
-                      setSelectedPieceId(pieceId);
-                      setDraggingPieceId(pieceId);
-                    }}
-                    onDragEnd={() => setDraggingPieceId(null)}
-                    className={`aspect-square rounded-2xl relative p-1.5 transition-all flex items-center justify-center overflow-hidden cursor-pointer transform-gpu preserve-3d ${
-                      isSelected
-                        ? 'border-2 border-amber-400 bg-[#25130a] shadow-[0_0_20px_rgba(245,158,11,0.65)] ring-2 ring-amber-500/50 scale-[1.04]'
-                        : isPlaced
-                        ? 'border border-emerald-800/80 bg-[#142319]/70 opacity-60'
-                        : 'border border-amber-950/90 bg-[#190d07] hover:border-amber-600/70'
-                    }`}
-                    title={`Mảnh #${pieceId} - ${pathInfo.categoryBadge}`}
-                  >
-                    <svg
-                      viewBox={`${pathInfo.bounds.minX - 5} ${pathInfo.bounds.minY - 5} ${
-                        pathInfo.bounds.maxX - pathInfo.bounds.minX + 10
-                      } ${pathInfo.bounds.maxY - pathInfo.bounds.minY + 10}`}
-                      className="w-full h-full drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]"
+              {/* 3-Column Grid of 9 pieces with cyan scrollbar */}
+              <div className="grid grid-cols-3 gap-2 max-h-36 overflow-y-auto cyan-tray-scrollbar pr-1">
+                {jigsawPieces.map(pieceObj => {
+                  const pId = pieceObj.id;
+                  const isUnlocked = effectiveUnlockedIds.includes(pId);
+                  const isPlaced = placedPieceIds.includes(pId);
+                  const isSelected = pId === activePieceId;
+
+                  return (
+                    <button
+                      key={`tray-piece-${pId}`}
+                      type="button"
+                      onClick={() => {
+                        audioManager.playClick();
+                        setActivePieceId(pId);
+                      }}
+                      className={`aspect-[4/3] rounded-xl overflow-hidden border p-1 bg-[#091830] relative transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-amber-400 ring-2 ring-amber-400/70 shadow-[0_0_12px_rgba(245,158,11,0.7)] scale-105'
+                          : isPlaced
+                          ? 'border-emerald-600/60 opacity-60'
+                          : isUnlocked
+                          ? 'border-cyan-500/50 hover:border-cyan-300'
+                          : 'border-slate-800 opacity-40'
+                      }`}
                     >
-                      <defs>
-                        <clipPath id={`tray-clip-${pieceId}`}>
-                          <path d={pathInfo.pathD} />
-                        </clipPath>
-                      </defs>
+                      <svg
+                        viewBox={`${pieceObj.bounds.minX - 6} ${pieceObj.bounds.minY - 6} ${
+                          pieceObj.bounds.maxX - pieceObj.bounds.minX + 12
+                        } ${pieceObj.bounds.maxY - pieceObj.bounds.minY + 12}`}
+                        className="w-full h-full"
+                      >
+                        <defs>
+                          <clipPath id={`tray-clip-${pieceObj.id}`}>
+                            <path d={pieceObj.pathD} />
+                          </clipPath>
+                        </defs>
 
-                      <g clipPath={`url(#tray-clip-${pieceId})`}>
-                        <image
-                          href={masterImageUrl}
-                          x="0"
-                          y="0"
-                          width="810"
-                          height="540"
-                          preserveAspectRatio="xMidYMid slice"
-                        />
-                      </g>
+                        {/* If unlocked, show colorful artwork */}
+                        {isUnlocked ? (
+                          <>
+                            <image
+                              href={artworkUrl}
+                              x="0"
+                              y="0"
+                              width={BOARD_WIDTH}
+                              height={BOARD_HEIGHT}
+                              preserveAspectRatio="none"
+                              clipPath={`url(#tray-clip-${pieceObj.id})`}
+                            />
+                            <path d={pieceObj.pathD} fill="none" stroke="#06b6d4" strokeWidth="2" />
+                          </>
+                        ) : (
+                          /* Locked piece silhouette */
+                          <path d={pieceObj.pathD} fill="#0d1f38" stroke="#1e3a5f" strokeWidth="2" />
+                        )}
+                      </svg>
 
-                      <path
-                        d={pathInfo.pathD}
-                        fill="none"
-                        stroke={isSelected ? '#f59e0b' : '#78350f'}
-                        strokeWidth={isSelected ? '2.5' : '1.5'}
-                      />
-                    </svg>
-
-                    {/* Placed Badge */}
-                    {isPlaced && (
-                      <div className="absolute inset-0 bg-[#0d1a10]/75 backdrop-blur-[1px] flex flex-col items-center justify-center text-emerald-400">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 animate-in zoom-in duration-200" />
-                        <span className="text-[9px] font-bold font-mono mt-0.5">Đã lắp</span>
-                      </div>
-                    )}
-
-                    {/* Piece Number Badge */}
-                    <div className="absolute top-1 left-1 px-1.5 py-0.2 rounded-md bg-[#190d07]/90 border border-amber-900 text-[9px] font-bold font-mono text-amber-300 shadow-sm">
-                      #{pieceId}
-                    </div>
-                  </motion.button>
-                );
-              })}
+                      {/* Status indicator on thumbnail */}
+                      {isPlaced ? (
+                        <span className="absolute bottom-0.5 right-0.5 bg-emerald-950/90 text-emerald-300 text-[8px] font-bold px-1 rounded">
+                          ✓
+                        </span>
+                      ) : !isUnlocked ? (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/40">
+                          <Lock className="w-3 h-3 text-slate-500" />
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-
-          {/* Bottom Tool Buttons: 💡 Gợi ý ô | 👁️ Hiện số 1-9 */}
-          <div className="grid grid-cols-2 gap-2.5 pt-1">
-            <motion.button
-              id="btn-hint-socket"
-              whileHover={{ scale: 1.03, y: -2 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleToggleHint}
-              className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
-                hintActive
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]'
-                  : 'bg-[#24130b] border-amber-700/80 hover:border-amber-500 text-amber-300'
-              }`}
-            >
-              <Lightbulb className="w-4 h-4" />
-              <span>Gợi ý ô</span>
-            </motion.button>
-
-            <motion.button
-              id="btn-toggle-numbers"
-              whileHover={{ scale: 1.03, y: -2 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleToggleNumbers}
-              className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
-                showNumbers
-                  ? 'bg-amber-600 text-white border-amber-500'
-                  : 'bg-[#24130b] border-amber-700/80 hover:border-amber-500 text-amber-300'
-              }`}
-            >
-              {showNumbers ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              <span>{showNumbers ? 'Ẩn số 1-9' : 'Hiện số 1-9'}</span>
-            </motion.button>
           </div>
         </div>
 
-        {/* ================= RIGHT COLUMN: THE GRAND PUZZLE BOARD ================= */}
-        <div className="lg:col-span-8 xl:col-span-8 flex flex-col space-y-3">
-          {/* Authentic Wood Chassis Frame */}
-          <div
-            id="grand-jigsaw-frame"
-            className="w-full rounded-3xl p-4 sm:p-6 border-4 border-[#3e1f13] wood-board-chassis relative shadow-[inset_0_4px_35px_rgba(0,0,0,0.8),0_12px_40px_rgba(0,0,0,0.6)] flex flex-col justify-center items-center overflow-hidden"
-          >
-            {/* SVG Jigsaw Board (810 x 540) */}
-            <div className="w-full max-w-[810px] aspect-[810/540] relative">
+        {/* ================= RIGHT COLUMN: 3x3 CARVED WOODEN JIGSAW BOARD ================= */}
+        <div className="lg:col-span-8 flex justify-center items-center w-full">
+          <div className="w-full max-w-[640px] aspect-[1024/683] rounded-3xl overflow-hidden p-3 sm:p-4 bg-[#502611] border-4 border-[#3a1a0b] shadow-[inset_0_12px_35px_rgba(0,0,0,0.9),0_20px_50px_rgba(0,0,0,0.85)] relative">
+            {/* The 3x3 Wooden Planks Board */}
+            <div className="w-full h-full rounded-2xl overflow-hidden wood-planks-board relative">
               <svg
-                viewBox="0 0 810 540"
-                className="w-full h-full drop-shadow-[0_12px_30px_rgba(0,0,0,0.8)]"
+                viewBox={`0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`}
+                className="w-full h-full"
               >
                 <defs>
-                  {/* ClipPaths for all 9 pieces */}
-                  {jigsawPaths.map(piece => (
-                    <clipPath key={`board-clip-${piece.position}`} id={`board-clip-${piece.position}`}>
+                  {/* SVG Clipping Paths for all 9 puzzle pieces */}
+                  {jigsawPieces.map(piece => (
+                    <clipPath key={`clip-${piece.id}`} id={`jigsaw-cell-clip-${piece.id}`}>
                       <path d={piece.pathD} />
                     </clipPath>
                   ))}
-
-                  {/* Dark Wood Socket Slats Pattern */}
-                  <pattern
-                    id="board-wood-pattern"
-                    width="100"
-                    height="30"
-                    patternUnits="userSpaceOnUse"
-                  >
-                    <rect width="100" height="30" fill="#180b06" />
-                    <line x1="0" y1="0" x2="100" y2="0" stroke="#251209" strokeWidth="1" />
-                    <line x1="0" y1="15" x2="100" y2="15" stroke="#1f0e07" strokeWidth="0.8" />
-                    <line x1="0" y1="29" x2="100" y2="29" stroke="#120803" strokeWidth="1.2" />
-                  </pattern>
                 </defs>
 
-                {/* Backing base of the sunken wooden board */}
-                <rect width="810" height="540" fill="url(#board-wood-pattern)" rx="8" stroke="#3d1f11" strokeWidth="2.5" />
-
-                {/* Sockets: Render all 9 interlocking sockets */}
-                {jigsawPaths.map(socket => {
-                  const isPlaced = placed.includes(socket.position);
-                  const isTargetHint =
-                    hintActive && selectedPieceId !== null && selectedPieceId === socket.position;
-                  const isShaking = shakeSocketId === socket.position;
+                {/* Render the 9 Interlocking Puzzle Sockets / Placed Pieces */}
+                {jigsawPieces.map(piece => {
+                  const isPlaced = placedPieceIds.includes(piece.id);
+                  const isShaking = shakingSlotId === piece.id;
 
                   return (
                     <g
-                      key={`socket-${socket.position}`}
-                      id={`jigsaw-socket-${socket.position}`}
-                      onClick={() => handleAttemptPlace(socket.position)}
-                      onDragOver={e => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'copy';
-                      }}
-                      onDrop={e => {
-                        e.preventDefault();
-                        const droppedId = Number(e.dataTransfer.getData('text/plain'));
-                        if (droppedId) {
-                          setSelectedPieceId(droppedId);
-                          handleAttemptPlace(socket.position);
-                        }
-                      }}
+                      key={`jigsaw-slot-${piece.id}`}
+                      id={`jigsaw-slot-${piece.id}`}
+                      onClick={() => handlePlaceIntoSlot(piece.id)}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => handleDropOnSlot(e, piece.id)}
                       className={`cursor-pointer transition-all ${
-                        isShaking ? 'animate-bounce' : ''
+                        isShaking ? 'animate-shake-wrong' : ''
                       }`}
                     >
-                      {/* Socket Interior */}
                       {isPlaced ? (
-                        /* Placed Piece: Render full artwork cleanly clipped with 3D snap bounce */
-                        <g
-                          clipPath={`url(#board-clip-${socket.position})`}
-                          className={justUnlockedPieceId === socket.position ? 'animate-jigsaw-snap origin-center' : ''}
-                        >
+                        /* PLACED PIECE: Colorful slice snapped into the wooden socket */
+                        <g className="animate-jigsaw-snap">
                           <image
-                            href={masterImageUrl}
+                            href={artworkUrl}
                             x="0"
                             y="0"
-                            width="810"
-                            height="540"
-                            preserveAspectRatio="xMidYMid slice"
+                            width={BOARD_WIDTH}
+                            height={BOARD_HEIGHT}
+                            preserveAspectRatio="none"
+                            clipPath={`url(#jigsaw-cell-clip-${piece.id})`}
+                          />
+                          {/* Subtle golden bevel seam */}
+                          <path
+                            d={piece.pathD}
+                            fill="none"
+                            stroke="#fbbf24"
+                            strokeWidth="1.5"
+                            opacity="0.4"
                           />
                         </g>
                       ) : (
-                        /* Empty Socket: Sunken dark wooden socket */
-                        <path
-                          d={socket.pathD}
-                          fill={isTargetHint ? 'rgba(245, 158, 11, 0.25)' : 'rgba(22, 10, 5, 0.95)'}
-                          stroke={
-                            isTargetHint
-                              ? '#f59e0b'
-                              : isShaking
-                              ? '#ef4444'
-                              : '#381c0f'
-                          }
-                          strokeWidth={isTargetHint || isShaking ? '3.5' : '2'}
-                          strokeDasharray={isTargetHint ? '8,4' : undefined}
-                          className={isTargetHint ? 'animate-pulse' : ''}
-                        />
-                      )}
-
-                      {/* Jigsaw Boundary Outline */}
-                      <path
-                        d={socket.pathD}
-                        fill="none"
-                        stroke={isPlaced ? '#2a140b' : '#30180c'}
-                        strokeWidth={isPlaced ? '2' : '1.5'}
-                      />
-
-                      {/* Coordinates / Socket Position Marks */}
-                      {!isPlaced && (
+                        /* EMPTY SLOT: Sunken dark carved wooden socket with authentic interlocking teeth */
                         <g>
-                          {/* Crosshair Target in Socket Center */}
-                          <line
-                            x1={socket.center.x - 8}
-                            y1={socket.center.y}
-                            x2={socket.center.x + 8}
-                            y2={socket.center.y}
-                            stroke="rgba(120, 53, 15, 0.3)"
-                            strokeWidth="1.5"
+                          {/* Dark carved groove fill */}
+                          <path
+                            d={piece.pathD}
+                            fill="#1a0903"
+                            stroke={isShaking ? '#ef4444' : '#331507'}
+                            strokeWidth={isShaking ? '3' : '2.5'}
                           />
-                          <line
-                            x1={socket.center.x}
-                            y1={socket.center.y - 8}
-                            x2={socket.center.x}
-                            y2={socket.center.y + 8}
-                            stroke="rgba(120, 53, 15, 0.3)"
-                            strokeWidth="1.5"
-                          />
-
-                          {/* Position Number Watermark (Always faint, bright when toggled or hinted) */}
-                          {(showNumbers || isTargetHint) ? (
-                            <text
-                              x={socket.center.x}
-                              y={socket.center.y + 10}
-                              textAnchor="middle"
-                              fill={isTargetHint ? '#f59e0b' : '#d97706'}
-                              fontSize="32"
-                              fontWeight="900"
-                              fontFamily="Space Grotesk, monospace"
-                              className={isTargetHint ? 'animate-ping' : ''}
-                            >
-                              #{socket.position}
-                            </text>
-                          ) : (
-                            <text
-                              x={socket.center.x}
-                              y={socket.center.y + 8}
-                              textAnchor="middle"
-                              fill="rgba(120, 53, 15, 0.35)"
-                              fontSize="22"
-                              fontWeight="800"
-                              fontFamily="Space Grotesk, monospace"
-                            >
-                              {socket.position}
-                            </text>
-                          )}
                         </g>
                       )}
                     </g>
@@ -828,55 +699,123 @@ const PuzzleBoardComponent: React.FC<PuzzleBoardProps> = ({
               </svg>
             </div>
           </div>
-
-          {/* Bottom Caption Bar matching Image 2 */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-2 text-xs text-[#d6c7b2] pt-1">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.9)] shrink-0" />
-              <span className="text-amber-200 font-bold font-mono text-xs sm:text-sm">
-                Bức tranh: {currentTheme.title}
-              </span>
-            </div>
-
-            <div className="text-[#d6c7b2] text-xs">
-              Quan sát răng cưa và chi tiết tranh, Kéo thả hoặc Nhấp ô để ghép
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Completion Banner if all 9 pieces placed */}
-      {isCompleted && (
-        <div className="mt-6 p-5 rounded-3xl bg-gradient-to-r from-sky-50 via-emerald-50 to-sky-50 border-2 border-emerald-300 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg animate-in fade-in zoom-in-95">
-          <div className="flex items-center gap-3.5">
-            <div className="p-3.5 bg-emerald-500 text-white rounded-2xl shadow-md">
-              <Trophy className="w-7 h-7" />
+      {/* ================= BANNER: PROMPT TO RETURN TO HOME CHALLENGE AFTER PLACING A PIECE ================= */}
+      {!isAllSolved && (recentlyPlacedPieceId !== null || placedPieceIds.length > 0) && (
+        <div className="relative z-10 w-full max-w-5xl mx-auto my-2 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-[#061e38]/95 via-[#0b2f5c]/95 to-[#061e38]/95 border-2 border-emerald-400/90 shadow-[0_0_25px_rgba(16,185,129,0.35)] flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300 shrink-0">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
             </div>
             <div>
-              <h4 className="text-lg font-black text-slate-900 font-tech">
-                HOÀN THÀNH TOÀN BỘ BỨC TRANH 9 MẢNH!
-              </h4>
-              <p className="text-xs text-slate-600">
-                Chúc mừng người chơi <strong>{studentName}</strong> đã xuất sắc vượt qua toàn bộ các thử thách khuôn mặt và trả lời đúng các câu hỏi STEM!
+              <div className="font-extrabold text-sm sm:text-base text-emerald-300 flex items-center gap-2">
+                <span>🎉 ĐÃ GHÉP THÀNH CÔNG VÀO BÀN CỜ!</span>
+                <span className="text-xs font-mono font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-500/40">
+                  {placedPieceIds.length}/9 mảnh
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Tuyệt vời! Nhấn nút bên cạnh để quay về Home thực hiện thử thách khuôn mặt và nhận câu hỏi tiếp theo!
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            id="btn-return-home-after-placement"
+            type="button"
+            onClick={() => {
+              audioManager.playClick();
+              if (onContinueNextRound) {
+                onContinueNextRound();
+              } else if (onBackToChallenge) {
+                onBackToChallenge();
+              }
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all cursor-pointer active:scale-95 shrink-0"
+          >
+            <Home className="w-4 h-4" />
+            <span>TIẾP TỤC THỬ THÁCH KHUÔN MẶT »</span>
+          </button>
+        </div>
+      )}
+
+      {/* ================= 3. BOTTOM BAR (NEON CYAN PILL - EXACT MATCH TO IMAGE) ================= */}
+      <div className="relative z-10 w-full max-w-5xl mx-auto rounded-full bg-[#06142a]/95 border-2 border-cyan-400 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-[0_0_20px_rgba(6,182,212,0.3)] text-xs sm:text-sm mt-2">
+        {/* Left: Picture Name + Upload & Reset Actions */}
+        <div className="inline-flex items-center gap-2 text-cyan-200">
+          <ImageIcon className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span>Bức tranh:</span>
+          <span className="font-mono font-bold text-white max-w-[200px] truncate" title={themeTitle}>
+            {themeTitle}
+          </span>
+          <button
+            id="btn-upload-puzzle-image-bottom"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="ml-2 px-3 py-1 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400 text-cyan-200 hover:text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow"
+          >
+            <Upload className="w-3.5 h-3.5 text-cyan-300" />
+            <span>Đổi / Tải ảnh lên</span>
+          </button>
+          {customArtworkUrl && onResetArtwork && (
+            <button
+              id="btn-reset-default-puzzle-image"
+              type="button"
+              onClick={() => {
+                audioManager.playClick();
+                onResetArtwork();
+              }}
+              className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 text-[11px] transition-all cursor-pointer"
+              title="Khôi phục ảnh mẫu Scratch"
+            >
+              Ảnh mẫu Scratch
+            </button>
+          )}
+        </div>
+
+        {/* Right: Hint Instruction */}
+        <div className="inline-flex items-center gap-2 text-cyan-200/90 text-[11px] sm:text-xs">
+          <Search className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span>Quan sát răng cưa và chi tiết tranh, Kéo thả hoặc Nhấp ô để ghép</span>
+        </div>
+      </div>
+
+      {/* Victory Notification when all 9 pieces are placed */}
+      {isAllSolved && (
+        <div className="relative z-10 mt-3 p-3 rounded-2xl bg-[#081b36]/95 border-2 border-cyan-400 flex flex-wrap items-center justify-between gap-3 shadow-[0_0_25px_rgba(6,182,212,0.4)]">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-cyan-100">
+              Xuất sắc! Em đã hoàn thành 9/9 mảnh ghép của bức tranh bí ẩn!
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
             {onOpenCertificate && (
               <button
-                onClick={onOpenCertificate}
-                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-black text-xs shadow-md cursor-pointer transition-transform active:scale-95 uppercase tracking-wider"
+                type="button"
+                onClick={() => {
+                  audioManager.playClick();
+                  onOpenCertificate();
+                }}
+                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-black text-xs shadow hover:brightness-110 cursor-pointer"
               >
-                Nhận Giấy Khen STEM
+                Nhận Giấy Khen FPT
               </button>
             )}
-            {onResetGame && (
+
+            {onContinueNextRound && (
               <button
-                onClick={onResetGame}
-                className="px-4 py-3 rounded-2xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer shadow-sm"
+                type="button"
+                onClick={() => {
+                  audioManager.playClick();
+                  onContinueNextRound();
+                }}
+                className="px-4 py-1.5 rounded-xl bg-[#0c2c54] hover:bg-[#133f78] text-cyan-300 font-bold text-xs border border-cyan-400 shadow cursor-pointer"
               >
-                Ghép Lại
+                Tiếp tục
               </button>
             )}
           </div>
@@ -886,4 +825,4 @@ const PuzzleBoardComponent: React.FC<PuzzleBoardProps> = ({
   );
 };
 
-export const PuzzleBoard = React.memo(PuzzleBoardComponent);
+export default PuzzleBoard;

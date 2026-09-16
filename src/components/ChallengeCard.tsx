@@ -260,15 +260,18 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
             </motion.div>
           </div>
 
-          {/* Instructions & Tip */}
-          <div className="space-y-2 mb-3">
-            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
-              {challenge.instructions}
-            </p>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-950/50 border border-cyan-500/40 text-cyan-200 text-xs shadow-sm">
-              <span className="font-bold text-cyan-300">💡 Mẹo:</span>
-              <span>{challenge.tip}</span>
+          {/* Streamlined Call-to-Action: Rút ngắn 1 câu rõ ràng, in to và màu sắc nổi bật */}
+          <div className="my-2.5 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/80 via-blue-950/60 to-cyan-950/80 border border-cyan-400/40 shadow-[0_0_20px_rgba(6,182,212,0.15)] flex items-center gap-3">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(251,191,36,0.25)]">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 animate-pulse" />
             </div>
+            <p className="text-sm sm:text-base text-slate-100 font-semibold leading-relaxed">
+              Hãy{' '}
+              <span className="text-base sm:text-xl font-black uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.65)] px-2 py-0.5 rounded-lg bg-amber-400/10 border border-amber-400/30 inline-block">
+                {challenge.name}
+              </span>{' '}
+              để giành quyền trả lời câu hỏi!
+            </p>
           </div>
         </div>
 

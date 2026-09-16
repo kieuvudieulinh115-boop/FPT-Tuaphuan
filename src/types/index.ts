@@ -99,6 +99,8 @@ export interface TeacherSettingsConfig {
   teacherName: string;
   schoolLogo?: string;
   activeQuestionSetId?: string;
+  puzzleImageUrl?: string;
+  puzzleThemeTitle?: string;
 }
 
 export interface StudentSession {
