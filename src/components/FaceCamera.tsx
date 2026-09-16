@@ -1,5 +1,20 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, AlertCircle, RefreshCw, Eye, Sparkles, SunMedium, Users, ShieldAlert } from 'lucide-react';
+import {
+  Camera,
+  AlertCircle,
+  RefreshCw,
+  Eye,
+  Sparkles,
+  SunMedium,
+  Users,
+  ShieldAlert,
+  SwitchCamera,
+  Play,
+  Copy,
+  Check,
+  Smartphone,
+  ExternalLink
+} from 'lucide-react';
 import { faceLandmarkerService } from '../services/ai/FaceLandmarkerService';
 import { expressionAnalyzer } from '../services/ai/ExpressionAnalyzer';
 import { challengeEvaluator } from '../services/ai/ChallengeEvaluator';
@@ -12,6 +27,12 @@ interface FaceCameraProps {
   onValidationChange: (res: FaceValidationResult) => void;
   onScoreUpdate: (res: ChallengeScoreResult) => void;
 }
+
+const isLikelyInAppBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || '';
+  return /FBAN|FBAV|Instagram|Line|MicroMessenger|Zalo|Snapchat|HeyTapBrowser/i.test(ua);
+};
 
 const FaceCameraComponent: React.FC<FaceCameraProps> = ({
   currentChallengeId,
@@ -34,6 +55,11 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
   const [cameraState, setCameraState] = useState<'loading' | 'active' | 'denied' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [modelLoading, setModelLoading] = useState<boolean>(true);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [needsUserGesture, setNeedsUserGesture] = useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [hasMultipleCameras, setHasMultipleCameras] = useState<boolean>(false);
+
   const [validation, setValidation] = useState<FaceValidationResult>({
     status: 'checking',
     message: 'Đang kết nối camera & nhận diện...',
@@ -44,51 +70,207 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
     isCentered: false
   });
 
-  // Start webcam
-  const startCamera = useCallback(async () => {
-    setCameraState('loading');
-    setErrorMessage('');
-
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width: { ideal: 640, max: 1280 },
-          height: { ideal: 480, max: 720 },
-          frameRate: { ideal: 30 }
-        },
-        audio: false
-      });
-
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().then(() => {
-            setCameraState('active');
-          }).catch(err => {
-            console.error('Video play error:', err);
-            setCameraState('error');
-            setErrorMessage('Không thể phát luồng camera.');
-          });
-        };
-      }
-    } catch (err: unknown) {
-      console.error('Camera access error:', err);
-      const errName = (err as { name?: string })?.name;
-      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-        setCameraState('denied');
-        setErrorMessage('Quyền truy cập Camera bị từ chối. Hãy nhấp vào biểu tượng camera trên thanh địa chỉ duyệt web để cho phép.');
-      } else {
-        setCameraState('error');
-        setErrorMessage('Không tìm thấy camera hoặc camera đang bị ứng dụng khác sử dụng.');
+  // Check if device has more than one video input
+  useEffect(() => {
+    async function checkCameras() {
+      try {
+        if (navigator.mediaDevices?.enumerateDevices) {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(d => d.kind === 'videoinput');
+          setHasMultipleCameras(videoDevices.length > 1);
+        }
+      } catch {
+        // Safe fallback
       }
     }
+    checkCameras();
   }, []);
+
+  // Multi-tier progressive stream acquisition specifically engineered for mobile devices
+  const requestStreamWithFallbacks = async (targetFacing: 'user' | 'environment'): Promise<MediaStream> => {
+    // 1. Check browser mediaDevices support
+    if (
+      !navigator?.mediaDevices?.getUserMedia &&
+      !(navigator as unknown as { getUserMedia?: unknown })?.getUserMedia &&
+      !(navigator as unknown as { webkitGetUserMedia?: unknown })?.webkitGetUserMedia &&
+      !(navigator as unknown as { mozGetUserMedia?: unknown })?.mozGetUserMedia
+    ) {
+      const err = new Error('NOT_SUPPORTED');
+      err.name = 'NotSupportedError';
+      throw err;
+    }
+
+    // Constraints list: Ordered from high-compatibility mobile to simplest fallback
+    // Note: NEVER use rigid max constraint on height/width for mobile portrait cameras
+    const constraintVariants: MediaStreamConstraints[] = [
+      {
+        video: {
+          facingMode: { ideal: targetFacing },
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        },
+        audio: false
+      },
+      {
+        video: {
+          facingMode: { ideal: targetFacing }
+        },
+        audio: false
+      },
+      {
+        video: {
+          facingMode: targetFacing
+        },
+        audio: false
+      },
+      {
+        video: true,
+        audio: false
+      }
+    ];
+
+    let lastError: unknown = null;
+    for (const constraints of constraintVariants) {
+      try {
+        if (navigator.mediaDevices?.getUserMedia) {
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } else {
+          // Legacy getUserMedia fallback
+          const legacyGUM =
+            (navigator as unknown as { getUserMedia?: Function }).getUserMedia ||
+            (navigator as unknown as { webkitGetUserMedia?: Function }).webkitGetUserMedia ||
+            (navigator as unknown as { mozGetUserMedia?: Function }).mozGetUserMedia;
+
+          if (legacyGUM) {
+            return await new Promise<MediaStream>((resolve, reject) => {
+              legacyGUM.call(navigator, constraints, resolve, reject);
+            });
+          }
+        }
+      } catch (err: unknown) {
+        lastError = err;
+        const errName = (err as { name?: string })?.name;
+        // If user actively denied permission, abort immediately
+        if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+          throw err;
+        }
+        console.warn('Mobile camera constraint fallback triggered:', constraints, err);
+      }
+    }
+
+    throw lastError || new Error('CAMERA_FAILED');
+  };
+
+  // Start webcam with full mobile lifecycle & autoplay handling
+  const startCamera = useCallback(async (targetFacing: 'user' | 'environment' = facingMode) => {
+    setCameraState('loading');
+    setErrorMessage('');
+    setNeedsUserGesture(false);
+
+    try {
+      // Clean up previous active tracks
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          try {
+            track.stop();
+          } catch {}
+        });
+        streamRef.current = null;
+      }
+
+      const stream = await requestStreamWithFallbacks(targetFacing);
+      streamRef.current = stream;
+
+      const video = videoRef.current;
+      if (!video) return;
+
+      // Crucial properties for iOS Safari & Mobile Chrome inline streaming
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.setAttribute('muted', 'true');
+      video.srcObject = stream;
+
+      const attemptPlay = async () => {
+        try {
+          await video.play();
+          setNeedsUserGesture(false);
+          setCameraState('active');
+        } catch (playErr: unknown) {
+          const errName = (playErr as { name?: string })?.name;
+          console.warn('video.play() rejected (autoplay/gesture required on mobile):', playErr);
+          if (errName === 'NotAllowedError' || errName === 'AbortError') {
+            // Mobile browser requires user touch gesture to begin live camera playback
+            setNeedsUserGesture(true);
+            setCameraState('loading');
+          } else {
+            // Still provide gesture unlock button
+            setNeedsUserGesture(true);
+          }
+        }
+      };
+
+      video.onloadedmetadata = () => {
+        attemptPlay();
+      };
+
+      video.oncanplay = () => {
+        attemptPlay();
+      };
+
+      // Call play immediately as well (some browsers fire metadata before handler binds)
+      attemptPlay();
+
+    } catch (err: unknown) {
+      console.error('Mobile camera start error:', err);
+      const errName = (err as { name?: string })?.name;
+
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        setCameraState('denied');
+        setErrorMessage('Quyền truy cập Camera bị từ chối trên thiết bị.');
+      } else if (errName === 'NotSupportedError') {
+        setCameraState('error');
+        setErrorMessage('Trình duyệt hiện tại chưa hỗ trợ Camera hoặc đang chạy trên kết nối không bảo mật.');
+      } else {
+        setCameraState('error');
+        setErrorMessage('Không thể khởi tạo camera điện thoại. Hãy đảm bảo chưa có ứng dụng nào khác đang chiếm quyền camera.');
+      }
+    }
+  }, [facingMode]);
+
+  // Handle manual unlock when mobile browser requires user tap
+  const handleUserUnlockVideo = async () => {
+    if (videoRef.current) {
+      try {
+        videoRef.current.muted = true;
+        await videoRef.current.play();
+        setNeedsUserGesture(false);
+        setCameraState('active');
+      } catch (err) {
+        console.error('Manual unlock failed:', err);
+        startCamera(facingMode);
+      }
+    }
+  };
+
+  // Toggle front/back camera
+  const handleToggleFacingMode = () => {
+    const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(nextFacing);
+    startCamera(nextFacing);
+  };
+
+  // Copy link tool for in-app browser users
+  const handleCopyLink = () => {
+    try {
+      navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      // Fallback
+    }
+  };
 
   // Initialize AI Model and start camera
   useEffect(() => {
@@ -99,7 +281,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
       try {
         await faceLandmarkerService.init();
       } catch (e) {
-        console.warn('FaceLandmarker init issue:', e);
+        console.warn('FaceLandmarker init issue on mobile:', e);
       } finally {
         if (isMounted) {
           setModelLoading(false);
@@ -108,7 +290,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
     }
 
     initAI();
-    startCamera();
+    startCamera(facingMode);
 
     return () => {
       isMounted = false;
@@ -116,7 +298,11 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
         cancelAnimationFrame(animFrameIdRef.current);
       }
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach(track => {
+          try {
+            track.stop();
+          } catch {}
+        });
       }
     };
   }, [startCamera]);
@@ -134,7 +320,18 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
       const video = videoRef.current;
       const canvas = canvasRef.current;
 
-      if (!video || !canvas || video.readyState < 2) {
+      // Essential mobile safety check: readyState >= 2 AND positive video dimensions
+      if (
+        !video ||
+        !canvas ||
+        video.readyState < 2 ||
+        video.paused ||
+        video.ended ||
+        !video.videoWidth ||
+        !video.videoHeight ||
+        video.videoWidth <= 0 ||
+        video.videoHeight <= 0
+      ) {
         animFrameIdRef.current = requestAnimationFrame(processFrame);
         return;
       }
@@ -146,7 +343,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
       }
 
       const now = performance.now();
-      // Throttle heavy MediaPipe AI detection to ~20 FPS (every 50ms) to ensure butter-smooth performance
+      // Throttle heavy MediaPipe AI detection to ~20 FPS (every 50ms) to ensure butter-smooth mobile performance
       if (now - lastDetectTimeRef.current >= 50) {
         lastDetectTimeRef.current = now;
 
@@ -155,7 +352,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
           ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
 
-        // Run real MediaPipe detection
+        // Run real MediaPipe detection with error suppression
         const det = faceLandmarkerService.detect(video);
         const faceCount = det ? det.faceCount : 0;
         const landmarks = det?.landmarks;
@@ -165,7 +362,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
 
         // Validate face position, distance, lighting, multiple faces
         const valRes = expressionAnalyzer.validateFace(faceCount, landmarks, video);
-        
+
         // Only propagate validation state when status or validity changes to prevent React render thrashing
         const valKey = `${valRes.status}_${valRes.isValid}_${valRes.message}`;
         if (lastEmittedValKeyRef.current !== valKey) {
@@ -322,12 +519,12 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
             ctx.moveTo(x2, cy - 6); ctx.lineTo(x2, cy + 6);
             ctx.stroke();
 
-            // 3. Single Elegant Biometric Segmented Ring (ONE ring only, rotating aperture)
+            // 3. Single Biometric Rotating Ring
             const apertureR = Math.max(halfW, halfH) * 1.04;
             const rotAngle = (now / 2200) % (Math.PI * 2);
             ctx.strokeStyle = `rgba(${themeRgb}, 0.45)`;
             ctx.lineWidth = 1.6;
-            const arcSpan = Math.PI * 0.20; // 36 degrees per arc
+            const arcSpan = Math.PI * 0.20;
             for (let i = 0; i < 4; i++) {
               const startA = rotAngle + (i * Math.PI * 0.5) + (Math.PI * 0.05);
               const endA = startA + arcSpan;
@@ -387,7 +584,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
             ctx.closePath();
             ctx.stroke();
 
-            // 6. Subtle Eye Outlines (Feedback for blink / wink)
+            // 6. Subtle Eye Outlines
             const leftEyeIndices = [33, 160, 158, 133, 153, 144];
             const rightEyeIndices = [362, 385, 387, 263, 373, 380];
             const drawEyeLoop = (indices: number[]) => {
@@ -468,6 +665,9 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
     };
   }, [cameraState, isPaused, currentChallengeId, passThreshold, onValidationChange, onScoreUpdate]);
 
+  const isMirrored = facingMode === 'user';
+  const inAppBrowserDetected = isLikelyInAppBrowser();
+
   return (
     <div className="relative w-full aspect-[4/3] sm:min-h-[380px] lg:min-h-[460px] xl:min-h-[500px] lg:max-h-[560px] rounded-3xl overflow-hidden bg-slate-950 border-2 border-sky-400 shadow-[0_0_30px_rgba(14,165,233,0.25)] flex items-center justify-center group">
       {/* Sci-Fi HUD Corner Brackets */}
@@ -481,60 +681,136 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
         <div className="animate-scan-line pointer-events-none z-10" />
       )}
 
-      {/* Video Element */}
+      {/* Video Element with Mobile WebKit Inline and Mirroring Controls */}
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${
-          cameraState === 'active' ? 'opacity-100' : 'opacity-0'
+        className={`w-full h-full object-cover transition-opacity duration-300 ${
+          isMirrored ? 'scale-x-[-1]' : 'scale-x-1'
+        } ${cameraState === 'active' ? 'opacity-100' : 'opacity-0'}`}
+      />
+
+      {/* Canvas Overlay with synchronized mirroring */}
+      <canvas
+        ref={canvasRef}
+        className={`absolute inset-0 w-full h-full pointer-events-none z-10 ${
+          isMirrored ? 'scale-x-[-1]' : 'scale-x-1'
         }`}
       />
 
-      {/* Canvas Overlay */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full pointer-events-none scale-x-[-1] z-10"
-      />
+      {/* Mobile Autoplay Policy Unlock Screen (when phone demands a user touch to start stream) */}
+      {needsUserGesture && (
+        <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center space-y-4 z-20 backdrop-blur-md">
+          <div className="w-16 h-16 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-cyan-300 animate-pulse shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+            <Camera className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5 max-w-xs">
+            <h3 className="text-base sm:text-lg font-bold text-white font-tech">
+              Chạm để bật Camera trên điện thoại
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Trình duyệt điện thoại yêu cầu một chạm của bạn để bắt đầu truyền hình ảnh trực tiếp.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleUserUnlockVideo}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm shadow-[0_0_25px_rgba(6,182,212,0.5)] cursor-pointer active:scale-95 transition-transform"
+          >
+            <Play className="w-4 h-4 fill-current" />
+            <span>Kích hoạt Camera ngay</span>
+          </button>
+        </div>
+      )}
 
       {/* Loading Overlay */}
-      {(cameraState === 'loading' || modelLoading) && (
+      {cameraState === 'loading' && !needsUserGesture && (
         <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center space-y-3 z-10 backdrop-blur-sm">
           <div className="relative">
             <RefreshCw className="w-10 h-10 text-cyan-400 animate-spin" />
             <Sparkles className="w-4 h-4 text-amber-300 absolute -top-1 -right-1 animate-pulse" />
           </div>
           <p className="text-base font-semibold text-slate-200 font-tech">
-            {modelLoading ? 'Đang tải mô hình thị giác Face Landmarker...' : 'Đang khởi động Camera...'}
+            {modelLoading ? 'Đang tải mô hình thị giác AI Face Landmarker...' : 'Đang khởi động Camera điện thoại...'}
           </p>
           <p className="text-xs text-slate-400 max-w-xs">
-            Hệ thống xử lý thị giác trên thiết bị, bảo mật an toàn tuyệt đối cho người chơi.
+            Hệ thống xử lý trực tiếp trên thiết bị, bảo mật an toàn tuyệt đối.
           </p>
         </div>
       )}
 
-      {/* Denied / Error State */}
-      {(cameraState === 'denied' || cameraState === 'error') && (
-        <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center space-y-4 z-10">
-          <div className="p-3 bg-rose-500/20 border border-rose-500/40 rounded-2xl text-rose-400">
-            {cameraState === 'denied' ? <ShieldAlert className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}
+      {/* Denied / Error State - Tailored for Mobile Troubleshooting */}
+      {(cameraState === 'denied' || cameraState === 'error') && !needsUserGesture && (
+        <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-5 sm:p-6 text-center space-y-3.5 z-20 overflow-y-auto">
+          <div className="p-3 bg-rose-500/20 border border-rose-500/40 rounded-2xl text-rose-400 shrink-0">
+            {cameraState === 'denied' ? <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8" /> : <AlertCircle className="w-7 h-7 sm:w-8 sm:h-8" />}
           </div>
-          <h3 className="text-lg font-bold text-slate-100 font-tech">
-            {cameraState === 'denied' ? 'Yêu cầu Quyền Camera' : 'Lỗi Thiết Bị Camera'}
-          </h3>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-xs leading-relaxed">
-            {errorMessage}
-          </p>
-          <button
-            id="retry-camera-btn"
-            type="button"
-            onClick={startCamera}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm shadow-lg transition-all cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Thử kết nối lại
-          </button>
+          
+          <div className="space-y-1">
+            <h3 className="text-base sm:text-lg font-bold text-slate-100 font-tech">
+              {cameraState === 'denied' ? 'Quyền Camera Bị Chặn' : 'Lỗi Kết Nối Camera'}
+            </h3>
+            <p className="text-xs text-slate-300 max-w-sm leading-relaxed">
+              {errorMessage}
+            </p>
+          </div>
+
+          {/* In-App Browser Warning (Zalo / Facebook / Messenger) */}
+          {inAppBrowserDetected && (
+            <div className="w-full max-w-xs p-3 rounded-xl bg-amber-950/60 border border-amber-500/40 text-[11px] sm:text-xs text-amber-200 text-left space-y-1.5">
+              <p className="font-bold flex items-center gap-1.5 text-amber-300">
+                <Smartphone className="w-3.5 h-3.5 shrink-0" />
+                Đang mở trong Zalo / Facebook?
+              </p>
+              <p className="text-slate-300 leading-normal">
+                Hãy nhấn dấu <strong>3 chấm (⋮ hoặc •••)</strong> ở góc trên bên phải, chọn <strong>"Mở bằng trình duyệt ngoài"</strong> (Safari / Chrome).
+              </p>
+            </div>
+          )}
+
+          {/* Device Specific Tip */}
+          <div className="w-full max-w-xs p-2.5 rounded-xl bg-slate-900/80 border border-cyan-500/30 text-[11px] text-slate-300 text-left space-y-1">
+            <p className="font-semibold text-cyan-300">Cách khắc phục nhanh trên điện thoại:</p>
+            <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+              <li><strong>iPhone (Safari):</strong> Bấm biểu tượng <strong>aA</strong> trên thanh link &gt; Cài đặt &gt; Camera: Cho phép.</li>
+              <li><strong>Android (Chrome):</strong> Bấm biểu tượng <strong>ổ khoá 🔒</strong> cạnh link &gt; Quyền &gt; Bật Camera.</li>
+            </ul>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <button
+              id="retry-camera-btn"
+              type="button"
+              onClick={() => startCamera(facingMode)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg transition-all cursor-pointer active:scale-95"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Thử kết nối lại
+            </button>
+
+            {hasMultipleCameras && (
+              <button
+                type="button"
+                onClick={handleToggleFacingMode}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-medium text-xs transition-all cursor-pointer"
+              >
+                <SwitchCamera className="w-3.5 h-3.5 text-cyan-400" />
+                Đổi Camera khác
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 text-xs transition-all cursor-pointer"
+            >
+              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedLink ? 'Đã sao chép link!' : 'Sao chép link web'}</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -542,7 +818,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
       {cameraState === 'active' && !modelLoading && (
         <div className="absolute bottom-3 inset-x-3 sm:inset-x-6 flex justify-center z-10 pointer-events-none">
           <div
-            className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold flex items-center gap-2 backdrop-blur-md border shadow-lg transition-all duration-300 ${
+            className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl text-xs sm:text-sm font-semibold flex items-center gap-2 backdrop-blur-md border shadow-lg transition-all duration-300 ${
               validation.isValid
                 ? 'bg-emerald-950/85 text-emerald-300 border-emerald-500/50 shadow-emerald-500/20'
                 : validation.status === 'multiple_faces'
@@ -553,20 +829,20 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
             }`}
           >
             {validation.isValid ? (
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+              <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-400 animate-ping" />
             ) : validation.status === 'multiple_faces' ? (
-              <Users className="w-4 h-4 text-rose-400 shrink-0" />
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 shrink-0" />
             ) : validation.status === 'poor_lighting' ? (
-              <SunMedium className="w-4 h-4 text-amber-400 shrink-0" />
+              <SunMedium className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 shrink-0" />
             ) : (
-              <Eye className="w-4 h-4 text-cyan-400 shrink-0" />
+              <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0" />
             )}
-            <span className="truncate">{validation.message}</span>
+            <span className="truncate max-w-[220px] sm:max-w-none">{validation.message}</span>
           </div>
         </div>
       )}
 
-      {/* Top Corner Badge: VISION ACTIVE */}
+      {/* Top Corner HUD Badges & Camera Flip Control */}
       {cameraState === 'active' && (
         <>
           <div className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950/80 border border-cyan-500/40 text-[11px] font-mono text-cyan-300 backdrop-blur-md pointer-events-none shadow-[0_0_15px_rgba(6,182,212,0.2)]">
@@ -574,9 +850,22 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
             <span className="font-bold">VISION ACTIVE</span>
           </div>
 
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950/80 border border-purple-500/40 text-[11px] font-mono text-purple-300 backdrop-blur-md pointer-events-none shadow-[0_0_15px_rgba(168,85,247,0.2)]">
-            <Sparkles className="w-3 h-3 text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
-            <span>478 MESH</span>
+          <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+            {/* Camera Flip button for phones */}
+            <button
+              type="button"
+              onClick={handleToggleFacingMode}
+              title="Đổi camera trước / sau"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-950/80 hover:bg-slate-800 border border-cyan-500/40 text-[11px] font-mono text-cyan-300 backdrop-blur-md shadow-[0_0_15px_rgba(6,182,212,0.2)] cursor-pointer active:scale-95 transition-all"
+            >
+              <SwitchCamera className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">{facingMode === 'user' ? 'Cam Trước' : 'Cam Sau'}</span>
+            </button>
+
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950/80 border border-purple-500/40 text-[11px] font-mono text-purple-300 backdrop-blur-md pointer-events-none shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+              <Sparkles className="w-3 h-3 text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
+              <span>478 MESH</span>
+            </div>
           </div>
 
           {/* Futuristic HUD Scanning Reticles */}

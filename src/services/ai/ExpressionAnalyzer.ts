@@ -11,6 +11,12 @@ export interface ExpressionAnalysisResult {
   cheekPuffScore: number;     // 0 to 1
 }
 
+// Reusable offscreen canvas for lighting sampling to prevent GC pressure on mobile devices
+let cachedOffCanvas: HTMLCanvasElement | null = null;
+let cachedOffCtx: CanvasRenderingContext2D | null = null;
+let lastBrightnessCheckTime = 0;
+let lastCalculatedBrightness = 120;
+
 export class ExpressionAnalyzer {
   analyze(landmarks: Landmark[], blendshapes?: { [name: string]: number }): ExpressionAnalysisResult {
     if (!landmarks || landmarks.length < 468) {
@@ -110,30 +116,37 @@ export class ExpressionAnalyzer {
     // Centering check: center within [0.22, 0.78]
     const isCentered = centerX >= 0.22 && centerX <= 0.78 && centerY >= 0.15 && centerY <= 0.85;
 
-    // Lighting check if videoElement is accessible
-    let brightness = 120;
-    if (videoElement && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+    // Lighting check if videoElement is accessible (throttled to 300ms on mobile)
+    let brightness = lastCalculatedBrightness;
+    const now = performance.now();
+    if (videoElement && videoElement.videoWidth > 0 && videoElement.videoHeight > 0 && now - lastBrightnessCheckTime >= 300) {
+      lastBrightnessCheckTime = now;
       try {
-        const offCanvas = document.createElement('canvas');
-        offCanvas.width = 40;
-        offCanvas.height = 40;
-        const ctx = offCanvas.getContext('2d', { willReadFrequently: true });
-        if (ctx) {
-          const sx = Math.max(0, minX * videoElement.videoWidth);
-          const sy = Math.max(0, minY * videoElement.videoHeight);
-          const sw = Math.min(videoElement.videoWidth - sx, width * videoElement.videoWidth);
-          const sh = Math.min(videoElement.videoHeight - sy, height * videoElement.videoHeight);
-          ctx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, 40, 40);
-          const imgData = ctx.getImageData(0, 0, 40, 40);
+        if (!cachedOffCanvas) {
+          cachedOffCanvas = document.createElement('canvas');
+          cachedOffCanvas.width = 32;
+          cachedOffCanvas.height = 32;
+          cachedOffCtx = cachedOffCanvas.getContext('2d', { willReadFrequently: true });
+        }
+        if (cachedOffCtx && cachedOffCanvas) {
+          const vw = videoElement.videoWidth;
+          const vh = videoElement.videoHeight;
+          const sx = Math.max(0, Math.min(vw - 1, minX * vw));
+          const sy = Math.max(0, Math.min(vh - 1, minY * vh));
+          const sw = Math.max(1, Math.min(vw - sx, width * vw));
+          const sh = Math.max(1, Math.min(vh - sy, height * vh));
+          cachedOffCtx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, 32, 32);
+          const imgData = cachedOffCtx.getImageData(0, 0, 32, 32);
           let totalLum = 0;
           for (let i = 0; i < imgData.data.length; i += 4) {
             totalLum += (imgData.data[i] * 0.299 + imgData.data[i + 1] * 0.587 + imgData.data[i + 2] * 0.114);
           }
-          brightness = Math.round(totalLum / (40 * 40));
+          brightness = Math.round(totalLum / (32 * 32));
+          lastCalculatedBrightness = brightness;
         }
       } catch {
         // Fallback safe brightness
-        brightness = 120;
+        brightness = lastCalculatedBrightness || 120;
       }
     }
 

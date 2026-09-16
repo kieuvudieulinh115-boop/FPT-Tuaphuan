@@ -86,7 +86,17 @@ class FaceLandmarkerService {
   }
 
   detect(videoElement: HTMLVideoElement): FaceLandmarkerDetectionResult | null {
-    if (!this.landmarker || !videoElement || videoElement.readyState < 2) {
+    if (
+      !this.landmarker ||
+      !videoElement ||
+      videoElement.readyState < 2 ||
+      videoElement.paused ||
+      videoElement.ended ||
+      !videoElement.videoWidth ||
+      !videoElement.videoHeight ||
+      videoElement.videoWidth <= 0 ||
+      videoElement.videoHeight <= 0
+    ) {
       return null;
     }
 
@@ -135,6 +145,11 @@ class FaceLandmarkerService {
 
   isReady(): boolean {
     return !!this.landmarker;
+  }
+
+  async retryInit(): Promise<FaceLandmarker | null> {
+    this.destroy();
+    return this.init();
   }
 
   destroy() {
