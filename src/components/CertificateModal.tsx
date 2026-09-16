@@ -95,7 +95,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
     ctx.fillStyle = '#047857';
     ctx.font = 'bold 18px "Be Vietnam Pro", sans-serif';
-    ctx.fillText('Thành tích: Ghép trọn vẹn 9/9 mảnh bức tranh bí mật (đạt 100%)', 600, 470);
+    ctx.fillText('Thành tích: Ghép trọn vẹn 9/9 mảnh bức tranh bí ẩn (đạt 100%)', 600, 470);
 
     // Draw Gold Badge in center bottom
     ctx.fillStyle = '#fef3c7';
@@ -233,7 +233,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               </p>
               <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-xs">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Hoàn thành xuất sắc: Ghép trọn vẹn 9/9 mảnh bức tranh bí mật (đạt 100%).</span>
+                <span>Hoàn thành xuất sắc: Ghép trọn vẹn 9/9 mảnh bức tranh bí ẩn (đạt 100%).</span>
               </div>
             </div>
 

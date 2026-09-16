@@ -16,13 +16,15 @@ export const Cyber3DFace: React.FC<Cyber3DFaceProps> = ({ className = '', intera
     if (!ctx) return;
 
     let animId: number;
-    let width = (canvas.width = canvas.offsetWidth * window.devicePixelRatio || 400);
-    let height = (canvas.height = canvas.offsetHeight * window.devicePixelRatio || 500);
+    const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5);
+    let width = (canvas.width = (canvas.offsetWidth || 350) * dpr);
+    let height = (canvas.height = (canvas.offsetHeight || 450) * dpr);
 
     const handleResize = () => {
       if (!canvas) return;
-      width = canvas.width = (canvas.offsetWidth || 350) * window.devicePixelRatio;
-      height = canvas.height = (canvas.offsetHeight || 450) * window.devicePixelRatio;
+      if (canvas.offsetWidth === 0 || canvas.offsetHeight === 0) return;
+      width = canvas.width = canvas.offsetWidth * dpr;
+      height = canvas.height = canvas.offsetHeight * dpr;
     };
 
     window.addEventListener('resize', handleResize);
@@ -32,11 +34,41 @@ export const Cyber3DFace: React.FC<Cyber3DFaceProps> = ({ className = '', intera
       const rect = canvas.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width - 0.5;
       const y = (e.clientY - rect.top) / rect.height - 0.5;
-      mouseRef.current.targetX = x * 0.8;
-      mouseRef.current.targetY = y * 0.6;
+      mouseRef.current.targetX = x * 0.45;
+      mouseRef.current.targetY = y * 0.35;
+    };
+
+    const handleTouch = (e: TouchEvent) => {
+      if (!interactive || e.touches.length === 0) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = (touch.clientX - rect.left) / rect.width - 0.5;
+      const y = (touch.clientY - rect.top) / rect.height - 0.5;
+      mouseRef.current.targetX = x * 0.55;
+      mouseRef.current.targetY = y * 0.4;
+    };
+
+    const handleTouchEnd = () => {
+      mouseRef.current.targetX = 0;
+      mouseRef.current.targetY = 0;
+    };
+
+    const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+      if (!interactive) return;
+      const gamma = e.gamma ?? 0;
+      const beta = e.beta ?? 0;
+      if (Math.abs(gamma) > 1 || Math.abs(beta) > 1) {
+        mouseRef.current.targetX = Math.max(-0.4, Math.min(0.4, (gamma / 40) * 0.4));
+        mouseRef.current.targetY = Math.max(-0.3, Math.min(0.3, ((beta - 45) / 40) * 0.3));
+      }
     };
 
     window.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('touchstart', handleTouch, { passive: true });
+    canvas.addEventListener('touchmove', handleTouch, { passive: true });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+    window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
 
     // Generate 3D Human Face Wireframe Points
     interface Point3D {
@@ -193,16 +225,22 @@ export const Cyber3DFace: React.FC<Cyber3DFaceProps> = ({ className = '', intera
     let scanY = -120;
 
     const render = () => {
+      // If canvas is hidden or detached (e.g. desktop canvas while on mobile, or vice versa), skip work
+      if (canvas.offsetWidth === 0 || canvas.offsetHeight === 0) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
       frame++;
       ctx.clearRect(0, 0, width, height);
 
-      // Smooth mouse follow
-      mouseRef.current.x += (mouseRef.current.targetX - mouseRef.current.x) * 0.05;
-      mouseRef.current.y += (mouseRef.current.targetY - mouseRef.current.y) * 0.05;
+      // Smooth mouse follow with gentle, soft damping
+      mouseRef.current.x += (mouseRef.current.targetX - mouseRef.current.x) * 0.035;
+      mouseRef.current.y += (mouseRef.current.targetY - mouseRef.current.y) * 0.035;
 
-      // 3D Rotation angles: auto oscillation + mouse interaction
-      const rotY = Math.sin(frame * 0.015) * 0.25 - mouseRef.current.x * 0.6;
-      const rotX = Math.cos(frame * 0.012) * 0.12 + mouseRef.current.y * 0.4;
+      // 3D Rotation angles: gentle, calming auto-rotation + soft touch interaction
+      const rotY = Math.sin(frame * 0.007) * 0.16 - mouseRef.current.x * 0.45;
+      const rotX = Math.cos(frame * 0.005) * 0.08 + mouseRef.current.y * 0.35;
       const cosY = Math.cos(rotY);
       const sinY = Math.sin(rotY);
       const cosX = Math.cos(rotX);
@@ -223,8 +261,8 @@ export const Cyber3DFace: React.FC<Cyber3DFaceProps> = ({ className = '', intera
         let y2 = pt.originY * cosX - z1 * sinX;
         let z2 = pt.originY * sinX + z1 * cosX;
 
-        // Add subtle breathing motion
-        y2 += Math.sin(frame * 0.04 + pt.originY * 0.02) * 1.5;
+        // Add subtle, gentle breathing motion
+        y2 += Math.sin(frame * 0.02 + pt.originY * 0.02) * 0.8;
 
         // Distance factor
         const distance = fov / (fov + z2 + 100);
@@ -235,64 +273,72 @@ export const Cyber3DFace: React.FC<Cyber3DFaceProps> = ({ className = '', intera
         return { x: screenX, y: screenY, z: depth, pt };
       });
 
-      // Update vertical scanline
-      scanY += 1.2;
+      // Update vertical scanline gently
+      scanY += 0.8;
       if (scanY > 130) scanY = -130;
       const screenScanY = centerY + scanY * scale;
 
-      // 1. Draw connecting lines
-      ctx.lineWidth = 1 * window.devicePixelRatio;
+      // 1. Draw connecting lines in batched strokes (10x faster)
+      ctx.lineWidth = 1 * dpr;
+
+      // Regular wireframe lines
+      ctx.beginPath();
       for (const [i1, i2] of lines) {
         const p1 = projected[i1];
         const p2 = projected[i2];
         if (!p1 || !p2) continue;
-
-        // Opacity based on depth
-        const avgZ = (p1.z + p2.z) / 2;
-        const alpha = Math.max(0.1, Math.min(0.85, (avgZ + 60) / 110));
-
-        // Scanner line illumination
-        const distToScan = Math.abs(p1.y - screenScanY);
-        const scanBoost = distToScan < 25 ? 1.5 : 1;
-
-        ctx.strokeStyle = scanBoost > 1
-          ? `rgba(56, 189, 248, ${alpha * 0.95})`
-          : `rgba(6, 182, 212, ${alpha * 0.45})`;
-        ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
       }
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.42)';
+      ctx.stroke();
 
-      // 2. Draw 3D nodes & landmarks
+      // Scanline illuminated lines (highlighted pass)
+      ctx.beginPath();
+      for (const [i1, i2] of lines) {
+        const p1 = projected[i1];
+        const p2 = projected[i2];
+        if (!p1 || !p2) continue;
+        if (Math.abs(p1.y - screenScanY) < 22 || Math.abs(p2.y - screenScanY) < 22) {
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+        }
+      }
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
+      ctx.stroke();
+
+      // 2. Draw 3D nodes & landmarks in batched calls
+      // Particles
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+      ctx.beginPath();
       for (const p of projected) {
         if (p.pt.type === 'particle') {
-          // Floating particle
-          ctx.fillStyle = `rgba(56, 189, 248, ${Math.max(0.1, (p.z + 70) / 150)})`;
-          ctx.fillRect(p.x, p.y, 1.5 * window.devicePixelRatio, 1.5 * window.devicePixelRatio);
-          continue;
+          ctx.rect(p.x, p.y, 1.5 * dpr, 1.5 * dpr);
         }
-
-        const isNearScan = Math.abs(p.y - screenScanY) < 18;
-        const nodeRadius = (p.pt.glow || isNearScan ? 2.8 : 1.8) * window.devicePixelRatio;
-
-        // Glowing outer circle for key landmark points
-        if (p.pt.glow || isNearScan) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, nodeRadius * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = isNearScan ? 'rgba(56, 189, 248, 0.3)' : 'rgba(6, 182, 212, 0.2)';
-          ctx.fill();
-        }
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, nodeRadius, 0, Math.PI * 2);
-        ctx.fillStyle = isNearScan
-          ? '#ffffff'
-          : p.pt.glow
-          ? '#38bdf8'
-          : 'rgba(6, 182, 212, 0.85)';
-        ctx.fill();
       }
+      ctx.fill();
+
+      // Key landmark points (glowing)
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      for (const p of projected) {
+        if (p.pt.type !== 'particle' && p.pt.glow) {
+          ctx.moveTo(p.x + 2.5 * dpr, p.y);
+          ctx.arc(p.x, p.y, 2.5 * dpr, 0, Math.PI * 2);
+        }
+      }
+      ctx.fill();
+
+      // Regular landmark points
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.8)';
+      ctx.beginPath();
+      for (const p of projected) {
+        if (p.pt.type !== 'particle' && !p.pt.glow) {
+          ctx.moveTo(p.x + 1.6 * dpr, p.y);
+          ctx.arc(p.x, p.y, 1.6 * dpr, 0, Math.PI * 2);
+        }
+      }
+      ctx.fill();
 
       // 3. Draw Scanline Sweep
       const grad = ctx.createLinearGradient(0, screenScanY - 15, 0, screenScanY + 15);
@@ -360,11 +406,18 @@ export const Cyber3DFace: React.FC<Cyber3DFaceProps> = ({ className = '', intera
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
+      if (canvas) {
+        canvas.removeEventListener('touchstart', handleTouch);
+        canvas.removeEventListener('touchmove', handleTouch);
+        canvas.removeEventListener('touchend', handleTouchEnd);
+        canvas.removeEventListener('touchcancel', handleTouchEnd);
+      }
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
     };
   }, [interactive]);
 
   return (
-    <div className={`relative flex items-center justify-center overflow-hidden pointer-events-none select-none ${className}`}>
+    <div className={`relative flex items-center justify-center overflow-hidden select-none ${interactive ? 'pointer-events-auto cursor-grab active:cursor-grabbing touch-none' : 'pointer-events-none'} ${className}`}>
       <canvas ref={canvasRef} className="w-full h-full object-contain" />
     </div>
   );

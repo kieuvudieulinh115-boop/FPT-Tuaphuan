@@ -61,7 +61,7 @@ const GameHeaderComponent: React.FC<GameHeaderProps> = ({
                 </span>
               </div>
               <p className="text-[10px] text-cyan-300/80 hidden md:block font-medium">
-                Thử thách khuôn mặt – Ghép tranh bí mật
+                Thử thách khuôn mặt - Ghép tranh bí ẩn
               </p>
             </div>
           </div>

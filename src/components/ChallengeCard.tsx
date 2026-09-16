@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ChallengeItem, ChallengeScoreResult, FaceValidationResult } from '../types';
 import { audioManager } from '../services/audio/AudioManager';
+import { useMobile3DTilt } from '../hooks/useMobile3DTilt';
 
 interface ChallengeCardProps {
   challenge: ChallengeItem;
@@ -69,23 +70,13 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
 
   const peakScoreRef = useRef<number>(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasTriggeredPassScoreSoundRef = useRef<boolean>(false);
 
-  // 3D Perspective Tilt on Mouse Movement
-  const [rotateX, setRotateX] = useState<number>(0);
-  const [rotateY, setRotateY] = useState<number>(0);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    setRotateX(y * -8);
-    setRotateY(x * 8);
-  };
-
-  const handleMouseLeave = () => {
-    setRotateX(0);
-    setRotateY(0);
-  };
+  // Interactive 3D Perspective Tilt for Mobile Touch, Gyroscope & Mouse (gentle, zero re-renders)
+  const { rotateX, rotateY, touchAndMouseProps } = useMobile3DTilt({
+    maxTilt: 6,
+    enableGyro: true
+  });
 
   // Reset state when challenge changes
   useEffect(() => {
@@ -93,13 +84,14 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
     setTimeLeft(totalTimeSeconds);
     setPeakScore(0);
     peakScoreRef.current = 0;
+    hasTriggeredPassScoreSoundRef.current = false;
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
   }, [challenge.id, totalTimeSeconds]);
 
-  // Track the highest peak score ONLY while running
+  // Track the highest peak score ONLY while running & play sound when reaching required score
   useEffect(() => {
     if (gameState === 'running' && validationResult?.isValid) {
       const currentScore = scoreResult?.score ?? 0;
@@ -107,8 +99,14 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
         peakScoreRef.current = currentScore;
         setPeakScore(currentScore);
       }
+
+      // Phát âm thanh ngay khi đạt số điểm cần (passThreshold)
+      if (currentScore >= passThreshold && !hasTriggeredPassScoreSoundRef.current) {
+        hasTriggeredPassScoreSoundRef.current = true;
+        audioManager.playScoreTargetReached();
+      }
     }
-  }, [gameState, scoreResult?.score, validationResult?.isValid]);
+  }, [gameState, scoreResult?.score, validationResult?.isValid, passThreshold]);
 
   // Handle Starting Challenge Countdown (10 seconds)
   const handleStartChallenge = () => {
@@ -117,6 +115,7 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
     setTimeLeft(totalTimeSeconds);
     setPeakScore(0);
     peakScoreRef.current = 0;
+    hasTriggeredPassScoreSoundRef.current = false;
 
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
@@ -183,24 +182,36 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
 
   return (
     <div
-      className="w-full perspective-1000"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+      className="w-full perspective-1000 touch-pan-y"
+      {...touchAndMouseProps}
     >
       <motion.div
-        layout
-        animate={{
+        style={{
           rotateX,
           rotateY,
-          y: rotateX === 0 && rotateY === 0 ? [-2, 2, -2] : 0
+          transformStyle: 'preserve-3d'
+        }}
+        animate={{
+          y: [-2, 2, -2]
         }}
         transition={{
-          rotateX: { type: 'spring', stiffness: 350, damping: 25 },
-          rotateY: { type: 'spring', stiffness: 350, damping: 25 },
           y: { repeat: Infinity, duration: 5, ease: 'easeInOut' }
         }}
-        className="w-full bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.25)] flex flex-col justify-between relative overflow-hidden text-slate-100 transform-gpu preserve-3d"
+        className="w-full bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.25)] flex flex-col justify-between relative overflow-hidden text-slate-100 transform-gpu preserve-3d cursor-grab active:cursor-grabbing select-none"
       >
+        {/* Interactive touch specular glow spotlight on mobile/cursor (GPU accelerated CSS variable) */}
+        <div
+          className="absolute pointer-events-none rounded-full blur-2xl transition-opacity duration-200 z-10 opacity-[var(--glow-opacity,0)]"
+          style={{
+            left: 'var(--glow-x, 50%)',
+            top: 'var(--glow-y, 50%)',
+            transform: 'translate(-50%, -50%)',
+            width: '220px',
+            height: '220px',
+            background: 'radial-gradient(circle, rgba(6,182,212,0.3) 0%, rgba(56,189,248,0.12) 50%, transparent 80%)'
+          }}
+        />
+
         {/* Hologram sheen scanline */}
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-holo-sheen pointer-events-none" />
 

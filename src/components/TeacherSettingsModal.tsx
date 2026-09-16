@@ -425,7 +425,7 @@ export const TeacherSettingsModal: React.FC<TeacherSettingsModalProps> = ({
         }
 
         setPieces(newPieces);
-        setSaveMessage('Đã cắt ảnh lớn thành 8 mảnh ghép bí mật thành công!');
+        setSaveMessage('Đã cắt ảnh lớn thành 9 mảnh ghép bí ẩn thành công!');
         setTimeout(() => setSaveMessage(''), 2500);
       };
       img.src = event.target?.result as string;

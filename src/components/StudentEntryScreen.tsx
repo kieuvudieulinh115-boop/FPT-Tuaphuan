@@ -6,6 +6,7 @@ import { FptSchoolsLogo } from './FptSchoolsLogo';
 import { Cyber3DFace } from './Cyber3DFace';
 import { Floating3DCards } from './Floating3DCards';
 import { HoloGlobe3D } from './HoloGlobe3D';
+import { useMobile3DTilt } from '../hooks/useMobile3DTilt';
 
 interface StudentEntryScreenProps {
   onStart: (playerName: string) => void;
@@ -20,6 +21,12 @@ export const StudentEntryScreen: React.FC<StudentEntryScreenProps> = ({
 }) => {
   const [name, setName] = useState(defaultName);
   const [error, setError] = useState('');
+
+  // Interactive 3D tilt for mobile touch and desktop (gentle, zero re-renders)
+  const { rotateX, rotateY, touchAndMouseProps } = useMobile3DTilt({
+    maxTilt: 6,
+    enableGyro: true
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,80 +155,123 @@ export const StudentEntryScreen: React.FC<StudentEntryScreenProps> = ({
           {/* Subheading & Description */}
           <div className="space-y-2 pt-1">
             <h2 className="text-lg sm:text-2xl font-bold text-slate-100 tracking-wide">
-              Thử thách khuôn mặt – Ghép tranh bí mật
+              Thử thách khuôn mặt - Ghép tranh bí ẩn
             </h2>
             <p className="text-xs sm:text-sm text-cyan-200/80 max-w-lg mx-auto leading-relaxed">
-              Vượt qua 9 thử thách biểu cảm và trả lời đúng các câu đố STEM thú vị để mở khóa toàn bộ bức tranh bí mật!
+              Vượt qua 9 thử thách biểu cảm và trả lời đúng các câu đố STEM thú vị để mở khóa toàn bộ bức tranh bí ẩn!
             </p>
           </div>
 
-          {/* PLAYER INPUT CARD */}
-          <div className="w-full max-w-lg bg-[#0a152e]/85 backdrop-blur-xl border-2 border-cyan-500/50 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(6,182,212,0.25)] relative text-left">
-            {/* Sci-Fi HUD Corner Brackets */}
-            <div className="absolute top-2.5 left-2.5 w-3.5 h-3.5 border-t-2 border-l-2 border-cyan-400 pointer-events-none" />
-            <div className="absolute top-2.5 right-2.5 w-3.5 h-3.5 border-t-2 border-r-2 border-cyan-400 pointer-events-none" />
-            <div className="absolute bottom-2.5 left-2.5 w-3.5 h-3.5 border-b-2 border-l-2 border-cyan-400 pointer-events-none" />
-            <div className="absolute bottom-2.5 right-2.5 w-3.5 h-3.5 border-b-2 border-r-2 border-cyan-400 pointer-events-none" />
+          {/* MOBILE 3D HOLOGRAPHIC CYBER FACE PORTAL (Touch to rotate in 3D on phone!) */}
+          <div className="flex lg:hidden flex-col items-center justify-center my-1 w-full">
+            <div className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full border-2 border-cyan-400/60 shadow-[0_0_30px_rgba(6,182,212,0.45)] bg-[#03091e]/90 overflow-hidden backdrop-blur-md cursor-grab active:cursor-grabbing preserve-3d">
+              <Cyber3DFace className="w-full h-full" interactive={true} />
+              <div className="absolute inset-0 rounded-full border border-cyan-300/30 pointer-events-none animate-pulse" />
+            </div>
+            <span className="text-[10px] font-mono text-cyan-400/90 font-bold uppercase tracking-wider mt-1 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+              Chạm & vuốt xoay 3D khuôn mặt
+            </span>
+          </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label htmlFor="player-name-input" className="block text-xs sm:text-sm font-bold text-cyan-300 tracking-wide">
-                  Họ và tên người chơi <span className="text-rose-400">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-cyan-400">
-                    <User className="w-5 h-5" />
+          {/* PLAYER INPUT CARD (3D TILT ON MOBILE TOUCH & DESKTOP) */}
+          <div
+            className="w-full max-w-lg perspective-1000 touch-pan-y"
+            {...touchAndMouseProps}
+          >
+            <motion.div
+              style={{
+                rotateX,
+                rotateY,
+                transformStyle: 'preserve-3d'
+              }}
+              animate={{
+                y: [-2, 2, -2]
+              }}
+              transition={{
+                y: { repeat: Infinity, duration: 5, ease: 'easeInOut' }
+              }}
+              className="w-full bg-[#0a152e]/85 backdrop-blur-xl border-2 border-cyan-500/50 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(6,182,212,0.25)] relative text-left transform-gpu preserve-3d overflow-hidden cursor-grab active:cursor-grabbing select-none"
+            >
+              {/* Interactive touch specular glow spotlight on mobile/cursor (GPU accelerated CSS variable) */}
+              <div
+                className="absolute pointer-events-none rounded-full blur-2xl transition-opacity duration-200 z-10 opacity-[var(--glow-opacity,0)]"
+                style={{
+                  left: 'var(--glow-x, 50%)',
+                  top: 'var(--glow-y, 50%)',
+                  transform: 'translate(-50%, -50%)',
+                  width: '220px',
+                  height: '220px',
+                  background: 'radial-gradient(circle, rgba(6,182,212,0.28) 0%, rgba(56,189,248,0.1) 50%, transparent 80%)'
+                }}
+              />
+
+              {/* Sci-Fi HUD Corner Brackets */}
+              <div className="absolute top-2.5 left-2.5 w-3.5 h-3.5 border-t-2 border-l-2 border-cyan-400 pointer-events-none" />
+              <div className="absolute top-2.5 right-2.5 w-3.5 h-3.5 border-t-2 border-r-2 border-cyan-400 pointer-events-none" />
+              <div className="absolute bottom-2.5 left-2.5 w-3.5 h-3.5 border-b-2 border-l-2 border-cyan-400 pointer-events-none" />
+              <div className="absolute bottom-2.5 right-2.5 w-3.5 h-3.5 border-b-2 border-r-2 border-cyan-400 pointer-events-none" />
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label htmlFor="player-name-input" className="block text-xs sm:text-sm font-bold text-cyan-300 tracking-wide">
+                    Họ và tên người chơi <span className="text-rose-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-cyan-400">
+                      <User className="w-5 h-5" />
+                    </div>
+                    <input
+                      id="player-name-input"
+                      type="text"
+                      autoFocus
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        if (error) setError('');
+                      }}
+                      placeholder="Ví dụ: Nguyễn Văn An – Lớp 4A"
+                      className="w-full pl-11 pr-4 py-3 bg-[#070e1f] border border-cyan-500/60 focus:border-cyan-400 rounded-2xl text-white text-sm sm:text-base placeholder-slate-500 outline-none transition-all duration-200 focus:ring-2 focus:ring-cyan-400/40 shadow-inner font-medium"
+                    />
                   </div>
-                  <input
-                    id="player-name-input"
-                    type="text"
-                    autoFocus
-                    value={name}
-                    onChange={(e) => {
-                      setName(e.target.value);
-                      if (error) setError('');
-                    }}
-                    placeholder="Ví dụ: Nguyễn Văn An – Lớp 4A"
-                    className="w-full pl-11 pr-4 py-3 bg-[#070e1f] border border-cyan-500/60 focus:border-cyan-400 rounded-2xl text-white text-sm sm:text-base placeholder-slate-500 outline-none transition-all duration-200 focus:ring-2 focus:ring-cyan-400/40 shadow-inner font-medium"
-                  />
+                  {error && (
+                    <p className="text-xs font-semibold text-rose-400 flex items-center gap-1 pt-0.5">
+                      <span>⚠️</span> {error}
+                    </p>
+                  )}
                 </div>
-                {error && (
-                  <p className="text-xs font-semibold text-rose-400 flex items-center gap-1 pt-0.5">
-                    <span>⚠️</span> {error}
-                  </p>
-                )}
-              </div>
 
-              {/* Privacy Note */}
-              <div className="bg-[#050c1b]/80 border border-cyan-500/30 rounded-2xl p-3.5 text-xs text-slate-300 flex items-start gap-2.5">
-                <ShieldCheck className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-cyan-200">Bảo mật & Quyền riêng tư của người chơi:</p>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Toàn bộ dữ liệu xử lý trực tiếp trên thiết bị của bạn. Hệ thống không lưu video, không lưu ảnh khuôn mặt và không gửi dữ liệu lên máy chủ. Tên chỉ dùng để in Giấy Khen sau khi hoàn thành.
-                  </p>
+                {/* Privacy Note */}
+                <div className="bg-[#050c1b]/80 border border-cyan-500/30 rounded-2xl p-3.5 text-xs text-slate-300 flex items-start gap-2.5">
+                  <ShieldCheck className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-cyan-200">Bảo mật & Quyền riêng tư của người chơi:</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Toàn bộ dữ liệu xử lý trực tiếp trên thiết bị của bạn. Hệ thống không lưu video, không lưu ảnh khuôn mặt và không gửi dữ liệu lên máy chủ. Tên chỉ dùng để in Giấy Khen sau khi hoàn thành.
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Circular Holographic Stage Pedestal & Start Button */}
-              <div className="relative pt-3 flex flex-col items-center justify-center">
-                {/* Glowing Concentric Ellipse Pedestals */}
-                <div className="absolute -bottom-2 w-72 sm:w-96 h-12 rounded-[100%] bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent blur-md pointer-events-none" />
-                <div className="absolute -bottom-1 w-60 sm:w-80 h-8 rounded-[100%] border-2 border-cyan-400/50 shadow-[0_0_30px_rgba(6,182,212,0.6)] pointer-events-none" />
+                {/* Circular Holographic Stage Pedestal & Start Button */}
+                <div className="relative pt-3 flex flex-col items-center justify-center">
+                  {/* Glowing Concentric Ellipse Pedestals */}
+                  <div className="absolute -bottom-2 w-72 sm:w-96 h-12 rounded-[100%] bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent blur-md pointer-events-none" />
+                  <div className="absolute -bottom-1 w-60 sm:w-80 h-8 rounded-[100%] border-2 border-cyan-400/50 shadow-[0_0_30px_rgba(6,182,212,0.6)] pointer-events-none" />
 
-                <motion.button
-                  id="start-challenge-button"
-                  type="submit"
-                  whileHover={{ scale: 1.02, y: -2 }}
-                  whileTap={{ scale: 0.98, y: 1 }}
-                  className="relative z-10 w-full group inline-flex items-center justify-center gap-3 px-8 py-3.5 sm:py-4 bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:via-sky-400 hover:to-cyan-300 text-slate-950 font-black text-base sm:text-lg rounded-2xl shadow-[0_0_35px_rgba(6,182,212,0.65)] hover:shadow-[0_0_50px_rgba(6,182,212,0.9)] transition-all duration-200 cursor-pointer uppercase tracking-wider"
-                >
-                  <Play className="w-5 h-5 fill-slate-950 text-slate-950" />
-                  <span>BẮT ĐẦU THỬ THÁCH</span>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </motion.button>
-              </div>
-            </form>
+                  <motion.button
+                    id="start-challenge-button"
+                    type="submit"
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98, y: 1 }}
+                    className="relative z-10 w-full group inline-flex items-center justify-center gap-3 px-8 py-3.5 sm:py-4 bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:via-sky-400 hover:to-cyan-300 text-slate-950 font-black text-base sm:text-lg rounded-2xl shadow-[0_0_35px_rgba(6,182,212,0.65)] hover:shadow-[0_0_50px_rgba(6,182,212,0.9)] transition-all duration-200 cursor-pointer uppercase tracking-wider"
+                  >
+                    <Play className="w-5 h-5 fill-slate-950 text-slate-950" />
+                    <span>BẮT ĐẦU THỬ THÁCH</span>
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
           </div>
 
           {/* 3 FEATURE CARDS WITH 3D HOVER TILT & BOUNCE */}
@@ -241,7 +291,7 @@ export const StudentEntryScreen: React.FC<StudentEntryScreenProps> = ({
             >
               <Sparkles className="w-5 h-5 text-amber-400 mb-1" />
               <p className="text-xs font-bold text-slate-100">9 Mảnh Ghép</p>
-              <p className="text-[10px] text-cyan-300/70">Bức tranh bí mật</p>
+              <p className="text-[10px] text-cyan-300/70">Bức tranh bí ẩn</p>
             </motion.div>
 
             <motion.div

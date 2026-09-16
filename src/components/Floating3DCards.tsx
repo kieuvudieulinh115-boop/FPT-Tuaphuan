@@ -8,21 +8,23 @@ interface Floating3DCardsProps {
 
 export const Floating3DCards: React.FC<Floating3DCardsProps> = ({ className = '' }) => {
   return (
-    <div className={`relative pointer-events-none select-none ${className}`} style={{ perspective: '1200px' }}>
+    <div className={`relative select-none ${className}`} style={{ perspective: '1200px' }}>
       {/* CARD 1: Top Floating Smile Card */}
       <motion.div
+        whileHover={{ scale: 1.06, rotateY: -6 }}
+        whileTap={{ scale: 0.96, rotateZ: 2 }}
         animate={{
-          y: [-8, 8, -8],
-          rotateX: [12, 18, 12],
-          rotateY: [-22, -14, -22],
-          rotateZ: [6, 2, 6]
+          y: [-4, 4, -4],
+          rotateX: [6, 10, 6],
+          rotateY: [-12, -6, -12],
+          rotateZ: [2, 0, 2]
         }}
         transition={{
-          duration: 5.5,
+          duration: 8.5,
           repeat: Infinity,
           ease: 'easeInOut'
         }}
-        className="absolute top-0 right-8 w-28 h-36 sm:w-36 sm:h-44 rounded-2xl bg-gradient-to-br from-cyan-500/20 via-sky-600/10 to-indigo-950/40 backdrop-blur-md border border-cyan-400/50 shadow-[0_0_30px_rgba(6,182,212,0.35)] flex flex-col items-center justify-center p-3 transform-gpu"
+        className="absolute top-0 right-8 w-28 h-36 sm:w-36 sm:h-44 rounded-2xl bg-gradient-to-br from-cyan-500/20 via-sky-600/10 to-indigo-950/40 backdrop-blur-md border border-cyan-400/50 shadow-[0_0_30px_rgba(6,182,212,0.35)] flex flex-col items-center justify-center p-3 transform-gpu cursor-pointer pointer-events-auto active:scale-95"
         style={{ transformStyle: 'preserve-3d' }}
       >
         {/* Glow corner brackets */}
@@ -41,19 +43,21 @@ export const Floating3DCards: React.FC<Floating3DCardsProps> = ({ className = ''
 
       {/* CARD 2: Middle Laughing / Winking Card */}
       <motion.div
+        whileHover={{ scale: 1.06, rotateY: -8 }}
+        whileTap={{ scale: 0.96, rotateZ: -2 }}
         animate={{
-          y: [10, -10, 10],
-          rotateX: [16, 8, 16],
-          rotateY: [-28, -20, -28],
-          rotateZ: [-4, 3, -4]
+          y: [5, -5, 5],
+          rotateX: [8, 4, 8],
+          rotateY: [-16, -10, -16],
+          rotateZ: [-2, 1, -2]
         }}
         transition={{
-          duration: 6.2,
+          duration: 9.2,
           repeat: Infinity,
           ease: 'easeInOut',
-          delay: 0.6
+          delay: 0.8
         }}
-        className="absolute top-36 right-0 w-32 h-40 sm:w-40 sm:h-48 rounded-2xl bg-gradient-to-br from-indigo-500/25 via-cyan-600/10 to-blue-950/45 backdrop-blur-md border border-indigo-400/50 shadow-[0_0_35px_rgba(99,102,241,0.35)] flex flex-col items-center justify-center p-3 transform-gpu"
+        className="absolute top-36 right-0 w-32 h-40 sm:w-40 sm:h-48 rounded-2xl bg-gradient-to-br from-indigo-500/25 via-cyan-600/10 to-blue-950/45 backdrop-blur-md border border-indigo-400/50 shadow-[0_0_35px_rgba(99,102,241,0.35)] flex flex-col items-center justify-center p-3 transform-gpu cursor-pointer pointer-events-auto active:scale-95"
         style={{ transformStyle: 'preserve-3d' }}
       >
         <div className="absolute top-1.5 left-1.5 w-2 h-2 border-t-2 border-l-2 border-indigo-300" />
@@ -71,19 +75,21 @@ export const Floating3DCards: React.FC<Floating3DCardsProps> = ({ className = ''
 
       {/* CARD 3: Bottom Floating Card */}
       <motion.div
+        whileHover={{ scale: 1.06, rotateY: -6 }}
+        whileTap={{ scale: 0.96, rotateZ: 2 }}
         animate={{
-          y: [-6, 12, -6],
-          rotateX: [6, 14, 6],
-          rotateY: [-18, -26, -18],
-          rotateZ: [2, -5, 2]
+          y: [-4, 6, -4],
+          rotateX: [4, 8, 4],
+          rotateY: [-10, -15, -10],
+          rotateZ: [1, -2, 1]
         }}
         transition={{
-          duration: 5.8,
+          duration: 8.8,
           repeat: Infinity,
           ease: 'easeInOut',
-          delay: 1.2
+          delay: 1.6
         }}
-        className="absolute top-76 right-10 w-28 h-36 sm:w-34 sm:h-42 rounded-2xl bg-gradient-to-br from-sky-400/20 via-teal-600/10 to-slate-950/40 backdrop-blur-md border border-sky-400/50 shadow-[0_0_30px_rgba(14,165,233,0.35)] flex flex-col items-center justify-center p-3 transform-gpu"
+        className="absolute top-76 right-10 w-28 h-36 sm:w-34 sm:h-42 rounded-2xl bg-gradient-to-br from-sky-400/20 via-teal-600/10 to-slate-950/40 backdrop-blur-md border border-sky-400/50 shadow-[0_0_30px_rgba(14,165,233,0.35)] flex flex-col items-center justify-center p-3 transform-gpu cursor-pointer pointer-events-auto active:scale-95"
         style={{ transformStyle: 'preserve-3d' }}
       >
         <div className="absolute top-1.5 left-1.5 w-2 h-2 border-t-2 border-l-2 border-sky-300" />

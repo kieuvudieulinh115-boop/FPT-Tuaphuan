@@ -152,6 +152,9 @@ export default function App() {
     setCurrentPhase('challenge');
     setActiveView('play');
     setCompletedTimestamp(undefined);
+    if (!audioManager.getMuted()) {
+      audioManager.startBgm();
+    }
   };
 
   // Face challenge passed -> proceed to STEM question
@@ -339,66 +342,10 @@ export default function App() {
       )}
 
       {/* Main Game Stage */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-1.5 pb-4 space-y-3">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-2 pb-4 space-y-4">
         {/* VIEW 1: CHALLENGE & STEM QUESTION VIEW */}
         {activeView === 'play' && !isCompleted && (
-          <div className="w-full space-y-3 animate-in fade-in duration-200">
-            {/* Compact Round Selector Bar */}
-            <div className="bg-[#050f28]/95 backdrop-blur-xl border border-cyan-400/50 px-3.5 py-2 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-[0_0_20px_rgba(6,182,212,0.2)] relative overflow-hidden">
-              {/* Sci-Fi HUD Corner Brackets */}
-              <div className="absolute top-0.5 left-0.5 w-2 h-2 border-t border-l border-cyan-400 pointer-events-none" />
-              <div className="absolute top-0.5 right-0.5 w-2 h-2 border-t border-r border-cyan-400 pointer-events-none" />
-              <div className="absolute bottom-0.5 left-0.5 w-2 h-2 border-b border-l border-cyan-400 pointer-events-none" />
-              <div className="absolute bottom-0.5 right-0.5 w-2 h-2 border-b border-r border-cyan-400 pointer-events-none" />
-
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
-                <span className="text-white font-black uppercase tracking-wider text-[11px] font-tech flex items-center gap-1.5">
-                  <span>VÒNG THỬ THÁCH AI:</span>
-                  <span className="text-cyan-400 font-mono font-bold">#{roundIndex + 1}/9</span>
-                </span>
-              </div>
-
-              {/* 9 Round Selector Pills */}
-              <div className="flex flex-wrap items-center gap-1">
-                {activeChallenges.slice(0, 9).map((ch, idx) => {
-                  const isCurrent = roundIndex === idx;
-                  const isPassed = completedRoundIndexes.includes(idx);
-                  const isPlaced = placedPieceIds.includes(idx + 1);
-
-                  return (
-                    <button
-                      key={`round-pick-${ch.id}`}
-                      type="button"
-                      onClick={() => {
-                        audioManager.playClick();
-                        setRoundIndex(idx);
-                        setCurrentPhase('challenge');
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1 ${
-                        isCurrent
-                          ? 'bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 text-slate-950 border-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.7)] font-black'
-                          : isPlaced
-                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/60 hover:bg-emerald-900 shadow-sm'
-                          : isPassed
-                          ? 'bg-amber-950/80 text-amber-300 border-amber-500/60 hover:bg-amber-900'
-                          : 'bg-[#081533]/80 text-cyan-200 border-cyan-500/30 hover:bg-[#0c1f4a] hover:border-cyan-400'
-                      }`}
-                      title={ch.name}
-                    >
-                      <span className="font-mono font-black">#{idx + 1}</span>
-                      <span>{ch.name.split(' ')[0]}</span>
-                      {isPlaced ? (
-                        <span className="text-[10px] text-emerald-400 font-black">✓</span>
-                      ) : isPassed ? (
-                        <span className="text-[10px] text-amber-400 font-black">★</span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
+          <div className="w-full space-y-4 animate-in fade-in duration-200">
             {/* Phase A & Phase B Container (Camera & Challenge Card aligned up) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
               {/* Left Stage: Camera & AI Processing */}
@@ -513,29 +460,6 @@ export default function App() {
           </section>
         )}
       </main>
-
-      {/* Cyber Sci-Fi Footer matching Image 2 */}
-      <footer className="w-full bg-[#030614] border-t border-cyan-900/60 py-3.5 px-4 sm:px-8 text-xs text-cyan-400/80 font-mono">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
-          {/* Left branding */}
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-cyan-300">FPT SCHOOLS</span>
-            <span className="text-cyan-600">/</span>
-            <span className="text-cyan-400/70 text-[11px]">STEM FOR A BRIGHTER GENERATION</span>
-          </div>
-
-          {/* Center HUD polygon capsule matching Image 2 */}
-          <div className="px-4 py-1 rounded-full bg-[#071533] border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.3)] text-cyan-200 text-[11px] font-bold tracking-widest uppercase">
-            EXPLORE × LEARN × CREATE × A BRIGHTER YOU
-          </div>
-
-          {/* Right AI tag with cyber slashes */}
-          <div className="flex items-center gap-2 text-cyan-400/70">
-            <span className="text-cyan-400 font-bold tracking-widest">//////</span>
-            <span className="text-[11px]">AI EDUCATION</span>
-          </div>
-        </div>
-      </footer>
 
       {/* Certificate Modal */}
       <CertificateModal

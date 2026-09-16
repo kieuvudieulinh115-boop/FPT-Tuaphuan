@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import { HelpCircle, CheckCircle, XCircle, ArrowRight, RotateCcw, Award, Lightbulb, Box } from 'lucide-react';
 import { Question } from '../types';
 import { audioManager } from '../services/audio/AudioManager';
+import { useMobile3DTilt } from '../hooks/useMobile3DTilt';
 
 interface QuestionViewProps {
   question: Question;
@@ -25,6 +26,12 @@ const QuestionViewComponent: React.FC<QuestionViewProps> = ({
   const [selectedOption, setSelectedOption] = useState<'A' | 'B' | 'C' | 'D' | null>(null);
   const [answerState, setAnswerState] = useState<'idle' | 'correct' | 'wrong'>('idle');
 
+  // Interactive 3D Perspective Tilt on Mobile Touch, Gyro & Mouse (gentle, zero re-renders)
+  const { rotateX, rotateY, touchAndMouseProps } = useMobile3DTilt({
+    maxTilt: 6,
+    enableGyro: true
+  });
+
   const options: Array<{ key: 'A' | 'B' | 'C' | 'D'; label: string }> = [
     { key: 'A', label: question.options.A },
     { key: 'B', label: question.options.B },
@@ -43,7 +50,7 @@ const QuestionViewComponent: React.FC<QuestionViewProps> = ({
 
     if (selectedOption === question.correctOption) {
       setAnswerState('correct');
-      audioManager.playPuzzleUnlock();
+      audioManager.playCorrectAnswer();
 
       // Fire celebratory confetti!
       try {
@@ -60,13 +67,37 @@ const QuestionViewComponent: React.FC<QuestionViewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto perspective-1000">
+    <div
+      className="w-full max-w-2xl mx-auto perspective-1000 touch-pan-y"
+      {...touchAndMouseProps}
+    >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, rotateX: 10 }}
-        animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-        className="w-full bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_40px_rgba(6,182,212,0.25)] text-slate-100 relative overflow-hidden transform-gpu preserve-3d"
+        style={{
+          rotateX,
+          rotateY,
+          transformStyle: 'preserve-3d'
+        }}
+        animate={{
+          y: [-2, 2, -2]
+        }}
+        transition={{
+          y: { repeat: Infinity, duration: 5, ease: 'easeInOut' }
+        }}
+        className="w-full bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_40px_rgba(6,182,212,0.25)] text-slate-100 relative overflow-hidden transform-gpu preserve-3d cursor-grab active:cursor-grabbing select-none"
       >
+        {/* Interactive touch specular glow spotlight on mobile/cursor (GPU accelerated CSS variable) */}
+        <div
+          className="absolute pointer-events-none rounded-full blur-2xl transition-opacity duration-200 z-10 opacity-[var(--glow-opacity,0)]"
+          style={{
+            left: 'var(--glow-x, 50%)',
+            top: 'var(--glow-y, 50%)',
+            transform: 'translate(-50%, -50%)',
+            width: '220px',
+            height: '220px',
+            background: 'radial-gradient(circle, rgba(6,182,212,0.3) 0%, rgba(56,189,248,0.12) 50%, transparent 80%)'
+          }}
+        />
+
         {/* Hologram sheen scanline */}
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-holo-sheen pointer-events-none" />
 
@@ -126,8 +157,8 @@ const QuestionViewComponent: React.FC<QuestionViewProps> = ({
                 disabled={answerState !== 'idle'}
                 onClick={() => handleSelectOption(key)}
                 whileHover={answerState === 'idle' ? { x: 6, scale: 1.015 } : {}}
-                whileTap={answerState === 'idle' ? { scale: 0.98 } : {}}
-                className={`w-full text-left p-4 rounded-2xl border-2 transition-all duration-200 flex items-center gap-4 cursor-pointer transform-gpu ${
+                whileTap={answerState === 'idle' ? { scale: 0.96, rotateX: 4, y: 2 } : {}}
+                className={`w-full text-left p-4 rounded-2xl border-2 transition-all duration-200 flex items-center gap-4 cursor-pointer transform-gpu preserve-3d ${
                   isCorrectChoice
                     ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 font-semibold shadow-[0_0_15px_rgba(52,211,153,0.3)]'
                     : isWrongChoice

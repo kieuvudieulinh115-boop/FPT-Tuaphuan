@@ -62,9 +62,17 @@ export class TechTouchManager {
     }
   };
 
+  private activeRipples: HTMLElement[] = [];
+
   // Spawn visual sci-fi cyber ripple at touch coordinates
   public spawnCyberRipple(x: number, y: number, isMini = false) {
     if (typeof document === 'undefined') return;
+
+    // Cap maximum concurrent ripples to 3 to keep DOM lean & smooth
+    while (this.activeRipples.length >= 3) {
+      const old = this.activeRipples.shift();
+      old?.remove();
+    }
 
     const rippleContainer = document.createElement('div');
     rippleContainer.className = 'cyber-touch-ripple';
@@ -105,10 +113,12 @@ export class TechTouchManager {
     rippleContainer.appendChild(crosshair);
 
     document.body.appendChild(rippleContainer);
+    this.activeRipples.push(rippleContainer);
 
     // Auto cleanup
     setTimeout(() => {
       rippleContainer.remove();
+      this.activeRipples = this.activeRipples.filter(r => r !== rippleContainer);
     }, 450);
   }
 }

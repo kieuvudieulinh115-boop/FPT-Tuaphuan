@@ -14,13 +14,14 @@ export const HoloGlobe3D: React.FC<HoloGlobe3DProps> = ({ className = '' }) => {
     if (!ctx) return;
 
     let animId: number;
-    let width = (canvas.width = (canvas.offsetWidth || 120) * window.devicePixelRatio);
-    let height = (canvas.height = (canvas.offsetHeight || 120) * window.devicePixelRatio);
+    const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5);
+    let width = (canvas.width = (canvas.offsetWidth || 120) * dpr);
+    let height = (canvas.height = (canvas.offsetHeight || 120) * dpr);
 
     const handleResize = () => {
-      if (!canvas) return;
-      width = canvas.width = (canvas.offsetWidth || 120) * window.devicePixelRatio;
-      height = canvas.height = (canvas.offsetHeight || 120) * window.devicePixelRatio;
+      if (!canvas || canvas.offsetWidth === 0) return;
+      width = canvas.width = canvas.offsetWidth * dpr;
+      height = canvas.height = canvas.offsetHeight * dpr;
     };
     window.addEventListener('resize', handleResize);
 
@@ -46,7 +47,12 @@ export const HoloGlobe3D: React.FC<HoloGlobe3DProps> = ({ className = '' }) => {
     let angle = 0;
 
     const render = () => {
-      angle += 0.02;
+      if (canvas.offsetWidth === 0 || canvas.offsetHeight === 0) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
+      angle += 0.007;
       ctx.clearRect(0, 0, width, height);
 
       const centerX = width / 2;
@@ -64,10 +70,12 @@ export const HoloGlobe3D: React.FC<HoloGlobe3DProps> = ({ className = '' }) => {
       ctx.beginPath();
       ctx.ellipse(centerX, centerY, 52 * scale, 18 * scale, -0.3, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-      ctx.lineWidth = 1.2 * window.devicePixelRatio;
+      ctx.lineWidth = 1.2 * dpr;
       ctx.stroke();
 
-      // Draw points
+      // Draw points in batched fill
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.85)';
+      ctx.beginPath();
       for (const p of points) {
         // Rotate around Y
         const x1 = p.x * cosA - p.z * sinA;
@@ -78,13 +86,13 @@ export const HoloGlobe3D: React.FC<HoloGlobe3DProps> = ({ className = '' }) => {
         const z2 = p.y * sinT + z1 * cosT;
 
         if (z2 > -10) {
-          const alpha = Math.max(0.15, (z2 + radius) / (radius * 2));
-          ctx.beginPath();
-          ctx.arc(centerX + x1 * scale, centerY + y2 * scale, 1.2 * window.devicePixelRatio, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
-          ctx.fill();
+          const px = centerX + x1 * scale;
+          const py = centerY + y2 * scale;
+          ctx.moveTo(px + 1.2 * dpr, py);
+          ctx.arc(px, py, 1.2 * dpr, 0, Math.PI * 2);
         }
       }
+      ctx.fill();
 
       animId = requestAnimationFrame(render);
     };
