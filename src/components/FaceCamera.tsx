@@ -469,7 +469,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
   }, [cameraState, isPaused, currentChallengeId, passThreshold, onValidationChange, onScoreUpdate]);
 
   return (
-    <div className="relative w-full aspect-[4/3] min-h-[320px] sm:min-h-[360px] max-h-[440px] rounded-3xl overflow-hidden bg-slate-950 border-2 border-sky-400 shadow-[0_0_25px_rgba(14,165,233,0.25)] flex items-center justify-center group">
+    <div className="relative w-full aspect-[4/3] sm:min-h-[380px] lg:min-h-[460px] xl:min-h-[500px] lg:max-h-[560px] rounded-3xl overflow-hidden bg-slate-950 border-2 border-sky-400 shadow-[0_0_30px_rgba(14,165,233,0.25)] flex items-center justify-center group">
       {/* Sci-Fi HUD Corner Brackets */}
       <div className="absolute top-2.5 left-2.5 w-5 h-5 border-t-2 border-l-2 border-cyan-400 rounded-tl-sm pointer-events-none z-20" />
       <div className="absolute top-2.5 right-2.5 w-5 h-5 border-t-2 border-r-2 border-cyan-400 rounded-tr-sm pointer-events-none z-20" />

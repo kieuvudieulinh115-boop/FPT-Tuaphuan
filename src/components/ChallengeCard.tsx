@@ -182,7 +182,7 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
 
   return (
     <div
-      className="w-full perspective-1000 touch-pan-y"
+      className="w-full h-full flex flex-col perspective-1000 touch-pan-y"
       {...touchAndMouseProps}
     >
       <motion.div
@@ -197,7 +197,7 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
         transition={{
           y: { repeat: Infinity, duration: 5, ease: 'easeInOut' }
         }}
-        className="w-full bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.25)] flex flex-col justify-between relative overflow-hidden text-slate-100 transform-gpu preserve-3d cursor-grab active:cursor-grabbing select-none"
+        className="w-full h-full min-h-[380px] lg:min-h-[460px] xl:min-h-[500px] bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-5 sm:p-7 shadow-[0_0_35px_rgba(6,182,212,0.25)] flex flex-col justify-between relative overflow-hidden text-slate-100 transform-gpu preserve-3d cursor-grab active:cursor-grabbing select-none"
       >
         {/* Interactive touch specular glow spotlight on mobile/cursor (GPU accelerated CSS variable) */}
         <div

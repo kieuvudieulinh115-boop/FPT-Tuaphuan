@@ -68,7 +68,7 @@ const QuestionViewComponent: React.FC<QuestionViewProps> = ({
 
   return (
     <div
-      className="w-full max-w-2xl mx-auto perspective-1000 touch-pan-y"
+      className="w-full h-full flex flex-col justify-center max-w-2xl mx-auto perspective-1000 touch-pan-y"
       {...touchAndMouseProps}
     >
       <motion.div
@@ -83,7 +83,7 @@ const QuestionViewComponent: React.FC<QuestionViewProps> = ({
         transition={{
           y: { repeat: Infinity, duration: 5, ease: 'easeInOut' }
         }}
-        className="w-full bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_40px_rgba(6,182,212,0.25)] text-slate-100 relative overflow-hidden transform-gpu preserve-3d cursor-grab active:cursor-grabbing select-none"
+        className="w-full h-full min-h-[380px] lg:min-h-[460px] xl:min-h-[500px] bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_40px_rgba(6,182,212,0.25)] text-slate-100 flex flex-col justify-between relative overflow-hidden transform-gpu preserve-3d cursor-grab active:cursor-grabbing select-none"
       >
         {/* Interactive touch specular glow spotlight on mobile/cursor (GPU accelerated CSS variable) */}
         <div

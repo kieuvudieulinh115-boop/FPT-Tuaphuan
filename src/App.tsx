@@ -341,15 +341,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Game Stage */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-2 pb-4 space-y-4">
+      {/* Main Game Stage - Perfectly Centered in Viewport */}
+      <main className="flex-1 flex flex-col justify-center items-center max-w-7xl 2xl:max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {/* VIEW 1: CHALLENGE & STEM QUESTION VIEW */}
         {activeView === 'play' && !isCompleted && (
-          <div className="w-full space-y-4 animate-in fade-in duration-200">
+          <div className="w-full my-auto space-y-4 lg:space-y-6 animate-in fade-in duration-200">
             {/* Phase A & Phase B Container (Camera & Challenge Card aligned up) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
               {/* Left Stage: Camera & AI Processing */}
-              <div className="lg:col-span-6 flex flex-col justify-center">
+              <div className="lg:col-span-6 flex flex-col justify-center h-full">
                 <FaceCamera
                   currentChallengeId={currentChallenge.id}
                   passThreshold={settings.passThreshold}
@@ -360,7 +360,7 @@ export default function App() {
               </div>
 
               {/* Right Stage: Interactive Challenge or STEM Question */}
-              <div className="lg:col-span-6 flex flex-col justify-center">
+              <div className="lg:col-span-6 flex flex-col justify-center h-full">
                 {currentPhase === 'challenge' ? (
                   <ChallengeCard
                     challenge={currentChallenge}
@@ -398,13 +398,13 @@ export default function App() {
             </div>
 
             {/* Quick Link to Puzzle Assembly Table */}
-            <div className="p-3 rounded-xl bg-[#06122d]/90 backdrop-blur-md border border-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.2)] flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-slate-200">
-              <div className="flex items-center gap-2.5">
-                <div className="w-6 h-6 rounded-full bg-cyan-950 border border-cyan-400/50 flex items-center justify-center text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)]">
-                  <Globe className="w-3.5 h-3.5" />
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-[#06122d]/90 backdrop-blur-md border border-cyan-400/40 shadow-[0_0_20px_rgba(6,182,212,0.25)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-cyan-950 border border-cyan-400/50 flex items-center justify-center text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.4)]">
+                  <Globe className="w-4 h-4" />
                 </div>
                 <span>
-                  Tiến trình lắp tranh: <strong className="text-cyan-300 font-mono text-sm">{placedPieceIds.length}/9 mảnh</strong> đã ghép vào tranh
+                  Tiến trình lắp tranh: <strong className="text-cyan-300 font-mono text-sm sm:text-base">{placedPieceIds.length}/9 mảnh</strong> đã ghép vào tranh
                   {placementTurnsAvailable > 0 && (
                     <span className="ml-2 text-amber-400 font-bold">
                       (Em đang có {placementTurnsAvailable} lượt chọn ghép mảnh!)
@@ -418,7 +418,7 @@ export default function App() {
                   audioManager.playClick();
                   setActiveView('assembly');
                 }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#1a1309] hover:bg-[#281c0c] text-amber-300 border border-amber-500/60 font-bold transition-all cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.25)] hover:border-amber-400 group text-xs"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1a1309] hover:bg-[#281c0c] text-amber-300 border border-amber-500/60 font-bold transition-all cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.25)] hover:border-amber-400 group text-xs sm:text-sm"
               >
                 <span>Đến Bàn Ghép Tranh Tự Chọn Mảnh</span>
                 <ChevronRight className="w-4 h-4 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
@@ -429,7 +429,7 @@ export default function App() {
 
         {/* VIEW 2: INTERACTIVE PUZZLE ASSEMBLY TABLE */}
         {(activeView === 'assembly' || isCompleted) && (
-          <section className="animate-in fade-in duration-200 space-y-4">
+          <section className="animate-in fade-in duration-200 space-y-4 my-auto w-full">
             {!isCompleted && (
               <div className="flex items-center justify-between pb-2">
                 <button
