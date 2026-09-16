@@ -13,6 +13,27 @@
   }
 }
 
+/* Suppress iOS Safari and Android WebKit native video player controls and fullscreen overlays */
+video::-webkit-media-controls,
+video::-webkit-media-controls-enclosure,
+video::-webkit-media-controls-panel,
+video::-webkit-media-controls-overlay-play-button,
+video::-webkit-media-controls-play-button,
+video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+video {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  touch-action: none !important;
+}
+
 /* Deep Cyber HUD Sci-Fi Grid & Hologram Atmosphere */
 .cyber-grid-pattern {
   background-color: #030718;

@@ -197,7 +197,7 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
         transition={{
           y: { repeat: Infinity, duration: 5, ease: 'easeInOut' }
         }}
-        className="w-full h-full min-h-[380px] lg:min-h-[460px] xl:min-h-[500px] bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-5 sm:p-7 shadow-[0_0_35px_rgba(6,182,212,0.25)] flex flex-col justify-between relative overflow-hidden text-slate-100 transform-gpu preserve-3d cursor-grab active:cursor-grabbing select-none"
+        className="w-full h-full min-h-0 lg:min-h-[460px] xl:min-h-[500px] bg-[#0a152e]/90 backdrop-blur-xl border-2 border-cyan-500/40 rounded-3xl p-4 sm:p-6 lg:p-7 shadow-[0_0_35px_rgba(6,182,212,0.25)] flex flex-col justify-between relative overflow-hidden text-slate-100 transform-gpu preserve-3d cursor-grab active:cursor-grabbing select-none"
       >
         {/* Interactive touch specular glow spotlight on mobile/cursor (GPU accelerated CSS variable) */}
         <div
@@ -226,11 +226,11 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
 
         {/* Header with Title & Timer */}
         <div>
-          <div className="flex items-center justify-between gap-4 mb-4 pb-4 border-b border-cyan-900/60">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-cyan-900/60">
+            <div className="flex items-center gap-2.5">
               <motion.div
                 whileHover={{ scale: 1.1, rotateZ: 5 }}
-                className="p-3 bg-cyan-950/70 border border-cyan-400/60 rounded-2xl shadow-[0_0_15px_rgba(6,182,212,0.25)] text-cyan-300 transform-gpu"
+                className="p-2.5 sm:p-3 bg-cyan-950/70 border border-cyan-400/60 rounded-2xl shadow-[0_0_15px_rgba(6,182,212,0.25)] text-cyan-300 transform-gpu"
               >
                 {renderChallengeIcon(challenge.icon)}
               </motion.div>
@@ -238,7 +238,7 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
                 <span className="text-[10px] font-bold text-cyan-400 tracking-wider uppercase font-mono drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
                   THỬ THÁCH KHUÔN MẶT AI
                 </span>
-                <h2 className="text-xl sm:text-2xl font-black text-white font-tech">
+                <h2 className="text-lg sm:text-2xl font-black text-white font-tech">
                   {challenge.name}
                 </h2>
               </div>
@@ -248,25 +248,25 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
             <motion.div
               animate={gameState === 'running' && timeLeft <= 3 ? { scale: [1, 1.08, 1] } : {}}
               transition={{ repeat: Infinity, duration: 0.6 }}
-              className="flex items-center gap-2 bg-[#050c1b] px-3.5 py-2 rounded-2xl border border-cyan-500/50 shadow-inner"
+              className="flex items-center gap-2 bg-[#050c1b] px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border border-cyan-500/50 shadow-inner shrink-0"
             >
-              <Timer className={`w-5 h-5 ${gameState === 'running' && timeLeft <= 3 ? 'text-rose-400 animate-bounce' : 'text-cyan-400'}`} />
+              <Timer className={`w-4 h-4 sm:w-5 sm:h-5 ${gameState === 'running' && timeLeft <= 3 ? 'text-rose-400 animate-bounce' : 'text-cyan-400'}`} />
               <div className="flex items-baseline gap-1 font-mono">
-                <span className={`text-xl font-black ${gameState === 'running' && timeLeft <= 3 ? 'text-rose-400' : 'text-white'}`}>
+                <span className={`text-lg sm:text-xl font-black ${gameState === 'running' && timeLeft <= 3 ? 'text-rose-400' : 'text-white'}`}>
                   {timeLeft}
                 </span>
-                <span className="text-xs text-cyan-300/70">s</span>
+                <span className="text-[10px] sm:text-xs text-cyan-300/70">s</span>
               </div>
             </motion.div>
           </div>
 
           {/* Instructions & Tip */}
-          <div className="space-y-2.5 mb-5">
-            <p className="text-sm sm:text-base text-slate-200 leading-relaxed font-medium">
+          <div className="space-y-2 mb-3">
+            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
               {challenge.instructions}
             </p>
-            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-950/50 border border-cyan-500/40 text-cyan-200 text-xs shadow-sm">
-              <span className="font-bold text-cyan-300">💡 Mẹo nhỏ:</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-950/50 border border-cyan-500/40 text-cyan-200 text-xs shadow-sm">
+              <span className="font-bold text-cyan-300">💡 Mẹo:</span>
               <span>{challenge.tip}</span>
             </div>
           </div>
@@ -274,25 +274,69 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
 
         {/* STATE 1: READY (Waiting for player to click 'BẮT ĐẦU THỬ THÁCH') */}
         {gameState === 'ready' && (
-          <div className="my-2 space-y-4 animate-in fade-in duration-300">
+          <div className="my-1 sm:my-2 space-y-3 animate-in fade-in duration-300">
             {/* Camera readiness indicator */}
-            <div className={`p-3 rounded-2xl border flex items-center gap-3 transition-colors ${
+            <div className={`p-2.5 sm:p-3 rounded-2xl border flex items-center justify-between gap-2 transition-colors ${
               validationResult.isValid
                 ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
                 : 'bg-amber-950/60 border-amber-500/50 text-amber-200'
             }`}>
-              {validationResult.isValid ? (
-                <Check className="w-5 h-5 text-emerald-400 shrink-0" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 animate-pulse" />
-              )}
-              <div className="text-xs">
-                <p className="font-semibold">
+              <div className="flex items-center gap-2 text-xs">
+                {validationResult.isValid ? (
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                )}
+                <p className="font-semibold text-[11px] sm:text-xs">
                   {validationResult.isValid
-                    ? 'Khuôn mặt đã sẵn sàng! Nhấn nút bên dưới để bắt đầu thử thách.'
-                    : validationResult.message || 'Hãy căn chỉnh khuôn mặt vào giữa khung camera...'}
+                    ? 'Khuôn mặt đã sẵn sàng trong khung hình!'
+                    : validationResult.message || 'Hãy căn chỉnh khuôn mặt vào giữa camera...'}
                 </p>
               </div>
+              {validationResult.isValid && (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-400/40 shrink-0">
+                  SẴN SÀNG
+                </span>
+              )}
+            </div>
+
+            {/* Real-time Live Expression Meter in Ready State */}
+            <div className="bg-[#050c1b]/90 p-2.5 sm:p-3 rounded-2xl border border-cyan-500/40 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-300 font-medium flex items-center gap-1.5 text-[11px] sm:text-xs">
+                  <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                  Độ nhận diện ({challenge.name}):
+                </span>
+                <span className={`font-mono font-bold text-xs sm:text-sm ${
+                  validationResult.isValid && scoreResult.score >= passThreshold
+                    ? 'text-emerald-400'
+                    : 'text-cyan-300'
+                }`}>
+                  {validationResult.isValid ? scoreResult.score : 0} / 100
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-150 rounded-full ${
+                    validationResult.isValid && scoreResult.score >= passThreshold
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+                      : 'bg-gradient-to-r from-blue-500 to-cyan-400'
+                  }`}
+                  style={{ width: `${Math.min(100, validationResult.isValid ? scoreResult.score : 0)}%` }}
+                />
+              </div>
+
+              {validationResult.isValid && scoreResult.score >= passThreshold ? (
+                <p className="text-[10px] sm:text-[11px] text-emerald-300 font-semibold flex items-center gap-1 animate-pulse">
+                  <span>✨</span> Biểu cảm đang rất chuẩn ({scoreResult.score}đ)! Bấm BẮT ĐẦU ngay để ghi điểm 10s!
+                </p>
+              ) : (
+                <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                  <span>🎯</span> Cần đạt tối thiểu <strong className="text-cyan-300 font-bold">{passThreshold} điểm</strong> để hoàn thành.
+                </p>
+              )}
             </div>
 
             {/* Big Start Challenge Button */}
@@ -302,23 +346,14 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98, y: 1 }}
               onClick={handleStartChallenge}
-              className="w-full py-3.5 sm:py-4 px-6 bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:via-sky-400 hover:to-cyan-300 text-slate-950 font-black text-base sm:text-lg rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.6)] flex items-center justify-center gap-3 cursor-pointer transition-all duration-200 uppercase tracking-wide group"
+              className="w-full py-3 sm:py-3.5 px-4 sm:px-6 bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:via-sky-400 hover:to-cyan-300 text-slate-950 font-black text-sm sm:text-base rounded-2xl shadow-[0_0_25px_rgba(6,182,212,0.5)] flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-200 uppercase tracking-wide group"
             >
-              <div className="w-8 h-8 rounded-full bg-slate-950 text-cyan-300 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-                <Play className="w-4 h-4 fill-cyan-300 text-cyan-300 ml-0.5" />
+              <div className="w-7 h-7 rounded-full bg-slate-950 text-cyan-300 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                <Play className="w-3.5 h-3.5 fill-cyan-300 text-cyan-300 ml-0.5" />
               </div>
               <span>BẮT ĐẦU (GIỮ BIỂU CẢM 10S)</span>
-              <Sparkles className="w-5 h-5 text-slate-950 animate-spin" style={{ animationDuration: '4s' }} />
+              <Sparkles className="w-4 h-4 text-slate-950 animate-spin" style={{ animationDuration: '4s' }} />
             </motion.button>
-
-            <div className="text-center space-y-1 text-xs text-slate-400">
-              <p>
-                ⏱️ Quy tắc: Làm theo yêu cầu và <span className="font-bold text-cyan-300">giữ nguyên trong 10 giây</span>.
-              </p>
-              <p className="text-[11px] text-cyan-300/80">
-                Sau 10 giây, hệ thống sẽ chấm điểm dựa trên <span className="font-bold underline text-white">kết quả đạt cao nhất</span> (Ngưỡng đạt: <span className="font-bold text-cyan-300">{passThreshold} điểm</span>).
-              </p>
-            </div>
           </div>
         )}
 

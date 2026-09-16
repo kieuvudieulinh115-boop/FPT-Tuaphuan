@@ -59,6 +59,8 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
   const [needsUserGesture, setNeedsUserGesture] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [hasMultipleCameras, setHasMultipleCameras] = useState<boolean>(false);
+  const [liveScoreVal, setLiveScoreVal] = useState<number>(0);
+  const [livePassedVal, setLivePassedVal] = useState<boolean>(false);
 
   const [validation, setValidation] = useState<FaceValidationResult>({
     status: 'checking',
@@ -186,10 +188,35 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
 
       // Crucial properties for iOS Safari & Mobile Chrome inline streaming
       video.muted = true;
+      video.defaultMuted = true;
       video.playsInline = true;
+      video.controls = false;
+      video.tabIndex = -1;
       video.setAttribute('playsinline', 'true');
       video.setAttribute('webkit-playsinline', 'true');
-      video.setAttribute('muted', 'true');
+      video.setAttribute('x5-playsinline', 'true');
+      video.setAttribute('x5-video-player-type', 'h5-page');
+      video.setAttribute('controlslist', 'nodownload nofullscreen noremoteplayback');
+      video.setAttribute('disablepictureinpicture', 'true');
+      video.setAttribute('disableremoteplayback', 'true');
+      video.removeAttribute('controls');
+
+      // Force WebKit to never enter native fullscreen
+      const preventFullscreen = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          (video as unknown as { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.();
+        } catch {}
+        try {
+          if (document.fullscreenElement) {
+            document.exitFullscreen?.();
+          }
+        } catch {}
+      };
+      video.addEventListener('webkitbeginfullscreen', preventFullscreen);
+      video.addEventListener('fullscreenchange', preventFullscreen);
+
       video.srcObject = stream;
 
       const attemptPlay = async () => {
@@ -631,6 +658,8 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
             lastEmittedScoreTimeRef.current = now;
             lastEmittedScoreValRef.current = scoreRes.score;
             lastEmittedPassedRef.current = scoreRes.passed;
+            setLiveScoreVal(scoreRes.score);
+            setLivePassedVal(scoreRes.passed);
             onScoreUpdate(scoreRes);
           }
         } else {
@@ -638,6 +667,8 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
           if (lastEmittedScoreValRef.current !== 0 || lastEmittedPassedRef.current !== false) {
             lastEmittedScoreValRef.current = 0;
             lastEmittedPassedRef.current = false;
+            setLiveScoreVal(0);
+            setLivePassedVal(false);
             onScoreUpdate({
               score: 0,
               passed: false,
@@ -669,7 +700,7 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
   const inAppBrowserDetected = isLikelyInAppBrowser();
 
   return (
-    <div className="relative w-full aspect-[4/3] sm:min-h-[380px] lg:min-h-[460px] xl:min-h-[500px] lg:max-h-[560px] rounded-3xl overflow-hidden bg-slate-950 border-2 border-sky-400 shadow-[0_0_30px_rgba(14,165,233,0.25)] flex items-center justify-center group">
+    <div className="relative w-full h-[220px] xs:h-[250px] sm:h-[300px] md:h-[360px] lg:h-[460px] xl:h-[500px] rounded-3xl overflow-hidden bg-slate-950 border-2 border-sky-400 shadow-[0_0_30px_rgba(14,165,233,0.25)] flex items-center justify-center group select-none">
       {/* Sci-Fi HUD Corner Brackets */}
       <div className="absolute top-2.5 left-2.5 w-5 h-5 border-t-2 border-l-2 border-cyan-400 rounded-tl-sm pointer-events-none z-20" />
       <div className="absolute top-2.5 right-2.5 w-5 h-5 border-t-2 border-r-2 border-cyan-400 rounded-tr-sm pointer-events-none z-20" />
@@ -681,16 +712,22 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
         <div className="animate-scan-line pointer-events-none z-10" />
       )}
 
-      {/* Video Element with Mobile WebKit Inline and Mirroring Controls */}
+      {/* Video Element with Mobile WebKit Inline and Mirroring Controls (Locked against iOS native video player) */}
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        className={`w-full h-full object-cover transition-opacity duration-300 ${
+        controls={false}
+        tabIndex={-1}
+        disablePictureInPicture
+        className={`w-full h-full object-cover pointer-events-none select-none touch-none transition-opacity duration-300 ${
           isMirrored ? 'scale-x-[-1]' : 'scale-x-1'
         } ${cameraState === 'active' ? 'opacity-100' : 'opacity-0'}`}
       />
+
+      {/* Touch shield overlay to prevent iOS WebKit from opening media controls */}
+      <div className="absolute inset-0 pointer-events-none select-none touch-none z-[5]" />
 
       {/* Canvas Overlay with synchronized mirroring */}
       <canvas
@@ -837,7 +874,16 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
             ) : (
               <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0" />
             )}
-            <span className="truncate max-w-[220px] sm:max-w-none">{validation.message}</span>
+            <span className="truncate max-w-[200px] sm:max-w-none">{validation.message}</span>
+            {validation.isValid && liveScoreVal > 0 && (
+              <span className={`px-2 py-0.5 rounded-lg text-[11px] font-mono font-bold border transition-colors ${
+                livePassedVal
+                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                  : 'bg-cyan-500/20 border-cyan-400/50 text-cyan-200'
+              }`}>
+                {liveScoreVal}%
+              </span>
+            )}
           </div>
         </div>
       )}

@@ -342,12 +342,12 @@ export default function App() {
       )}
 
       {/* Main Game Stage - Perfectly Centered in Viewport */}
-      <main className="flex-1 flex flex-col justify-center items-center max-w-7xl 2xl:max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+      <main className="flex-1 flex flex-col justify-center items-center max-w-7xl 2xl:max-w-[1440px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-6 lg:py-8">
         {/* VIEW 1: CHALLENGE & STEM QUESTION VIEW */}
         {activeView === 'play' && !isCompleted && (
-          <div className="w-full my-auto space-y-4 lg:space-y-6 animate-in fade-in duration-200">
+          <div className="w-full my-auto space-y-3 sm:space-y-4 lg:space-y-6 animate-in fade-in duration-200">
             {/* Phase A & Phase B Container (Camera & Challenge Card aligned up) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-5 items-stretch">
               {/* Left Stage: Camera & AI Processing */}
               <div className="lg:col-span-6 flex flex-col justify-center h-full">
                 <FaceCamera
