@@ -53,8 +53,10 @@ export default function App() {
   const [placedPieceIds, setPlacedPieceIds] = useState<number[]>([]); // Pieces manually assembled onto board by student
   const [roundIndex, setRoundIndex] = useState<number>(0); // 0 to 8
   const [currentPhase, setCurrentPhase] = useState<'challenge' | 'question'>('challenge');
+  const [roundState, setRoundState] = useState<'ready' | 'countdown' | 'playing'>('ready');
   const [activeView, setActiveView] = useState<'play' | 'assembly'>('play');
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState<boolean>(false);
+  const [isExitConfirmOpen, setIsExitConfirmOpen] = useState<boolean>(false);
 
   // AI & Live Video Status
   const [currentScore, setCurrentScore] = useState<ChallengeScoreResult>({
@@ -156,6 +158,7 @@ export default function App() {
     setPlacedPieceIds([]);
     setRoundIndex(0);
     setCurrentPhase('challenge');
+    setRoundState('ready');
     setActiveView('play');
     setCompletedTimestamp(undefined);
     if (!audioManager.getMuted()) {
@@ -164,12 +167,26 @@ export default function App() {
   };
 
   // Face challenge passed -> proceed to STEM question
-  const handlePassChallenge = () => {
+  const handlePassChallenge = useCallback(() => {
+    setRoundState('ready');
     setCurrentPhase('question');
-  };
+  }, []);
+
+  const handlePlayerReady = useCallback(() => {
+    setRoundState('countdown');
+  }, []);
+
+  const handleCountdownComplete = useCallback(() => {
+    setRoundState('playing');
+  }, []);
+
+  const handleResetToReady = useCallback(() => {
+    setRoundState('ready');
+  }, []);
 
   // Question correct -> randomly unlock one piece from remaining locked pieces, switch to assembly view!
   const handleCorrectAnswer = () => {
+    setRoundState('ready');
     setCompletedRoundIndexes(prev => {
       if (prev.includes(roundIndex)) return prev;
       return [...prev, roundIndex];
@@ -224,6 +241,7 @@ export default function App() {
       setRoundIndex(prev => prev + 1);
     }
     setCurrentPhase('challenge');
+    setRoundState('ready');
     setActiveView('play');
     setCurrentScore({
       score: 0,
@@ -240,6 +258,7 @@ export default function App() {
 
   // Question wrong -> retry face challenge
   const handleWrongAnswer = () => {
+    setRoundState('ready');
     setCurrentPhase('challenge');
   };
 
@@ -251,23 +270,27 @@ export default function App() {
     setPlacedPieceIds([]);
     setRoundIndex(0);
     setCurrentPhase('challenge');
+    setRoundState('ready');
     setActiveView('play');
     setCompletedTimestamp(undefined);
     setIsResetConfirmOpen(false);
   };
 
-  // Reset session
+  // Exit session confirmation
   const handleExitSession = () => {
-    if (confirm('Em có muốn kết thúc phiên chơi hiện tại và quay lại màn hình chính không?')) {
-      setStudentName('');
-      setCompletedRoundIndexes([]);
-      setUnlockedPieceIds([]);
-      setJustUnlockedPieceId(null);
-      setPlacedPieceIds([]);
-      setRoundIndex(0);
-      setCurrentPhase('challenge');
-      setActiveView('play');
-    }
+    setIsExitConfirmOpen(true);
+  };
+
+  const handleConfirmExit = () => {
+    setStudentName('');
+    setCompletedRoundIndexes([]);
+    setUnlockedPieceIds([]);
+    setJustUnlockedPieceId(null);
+    setPlacedPieceIds([]);
+    setRoundIndex(0);
+    setCurrentPhase('challenge');
+    setActiveView('play');
+    setIsExitConfirmOpen(false);
   };
 
   // Save Handlers for Teacher Settings
@@ -408,6 +431,10 @@ export default function App() {
                   currentChallengeId={currentChallenge.id}
                   passThreshold={settings.passThreshold}
                   isPaused={currentPhase !== 'challenge'}
+                  roundState={roundState}
+                  isPassed={currentScore.passed || currentScore.score >= settings.passThreshold}
+                  onPlayerReady={handlePlayerReady}
+                  onCountdownComplete={handleCountdownComplete}
                   onValidationChange={setValidation}
                   onScoreUpdate={setCurrentScore}
                 />
@@ -423,8 +450,11 @@ export default function App() {
                     scoreResult={currentScore}
                     currentScoreResult={currentScore}
                     validationResult={validation}
+                    roundState={roundState}
+                    onResetToReady={handleResetToReady}
                     onPass={handlePassChallenge}
                     onRetry={() => {
+                      handleResetToReady();
                       setCurrentScore({
                         score: 0,
                         passed: false,
@@ -544,6 +574,18 @@ export default function App() {
         totalPieces={9}
         onConfirm={handleConfirmReset}
         onCancel={() => setIsResetConfirmOpen(false)}
+      />
+
+      {/* Exit Session Confirmation Modal */}
+      <ResetConfirmModal
+        isOpen={isExitConfirmOpen}
+        title="Đổi Người Chơi / Thoát Phiên?"
+        subtitle="XÁC NHẬN THOÁT PHIÊN"
+        description="Em có muốn kết thúc phiên chơi của học sinh hiện tại và quay về màn hình chính để đổi lượt không?"
+        warningText={`Tiến trình hiện tại của ${studentName} sẽ được lưu lại hoặc đặt lại khi bắt đầu phiên mới.`}
+        confirmText="Về Màn Hình Chính"
+        onConfirm={handleConfirmExit}
+        onCancel={() => setIsExitConfirmOpen(false)}
       />
     </div>
   );

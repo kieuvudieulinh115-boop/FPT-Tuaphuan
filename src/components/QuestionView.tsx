@@ -60,6 +60,11 @@ const QuestionViewComponent: React.FC<QuestionViewProps> = ({
           origin: { y: 0.6 }
         });
       } catch {}
+
+      // Tự động chuyển ngay sang bàn ghép tranh sau 800ms, không cần bấm nút
+      setTimeout(() => {
+        onCorrectAnswer();
+      }, 800);
     } else {
       setAnswerState('wrong');
       audioManager.playFail();
@@ -212,37 +217,26 @@ const QuestionViewComponent: React.FC<QuestionViewProps> = ({
         )}
 
         {/* Correct State */}
+        {/* Correct State - Auto transitions to puzzle board */}
         {answerState === 'correct' && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-emerald-950/70 border border-emerald-500/50 rounded-2xl p-5 text-center space-y-3 shadow-sm"
+            className="bg-emerald-950/80 border-2 border-emerald-400/60 rounded-2xl p-5 text-center space-y-2.5 shadow-[0_0_30px_rgba(16,185,129,0.3)]"
           >
-            <div className="flex items-center justify-center gap-2 text-emerald-300 font-extrabold text-xl font-tech">
-              <CheckCircle className="w-7 h-7 text-emerald-400" />
-              <span>🎉 CHÍNH XÁC! NHẬN 1 LƯỢT CHỌN MẢNH GHÉP</span>
+            <div className="flex items-center justify-center gap-2 text-emerald-300 font-extrabold text-lg sm:text-xl font-tech">
+              <CheckCircle className="w-6 h-6 text-emerald-400 shrink-0" />
+              <span>🎉 CHÍNH XÁC!</span>
             </div>
-            <p className="text-xs sm:text-sm text-emerald-200">
-              {question.explanation ? (
-                <span className="block mb-1 font-semibold">{question.explanation}</span>
-              ) : null}
-              Toàn bộ các mảnh ghép còn lại đã sẵn sàng! Bạn hãy sang Bàn Ghép Tranh và tự do chọn 1 mảnh bất kỳ mà bạn nhận diện được để ghép vào khung tranh nhé!
-            </p>
-            <motion.button
-              id="claim-piece-btn"
-              type="button"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                audioManager.playClick();
-                onCorrectAnswer();
-              }}
-              className="w-full inline-flex items-center justify-center gap-2.5 px-6 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-base rounded-2xl shadow-[0_0_25px_rgba(52,211,153,0.5)] cursor-pointer transition-transform uppercase tracking-wide"
-            >
-              <Box className="w-5 h-5" />
-              <span>SANG BÀN GHÉP TRANH ĐỂ CHỌN 1 MẢNH GHÉP YÊU THÍCH</span>
-              <ArrowRight className="w-5 h-5" />
-            </motion.button>
+            {question.explanation && (
+              <p className="text-xs sm:text-sm text-emerald-200 font-medium">
+                {question.explanation}
+              </p>
+            )}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-900/60 border border-emerald-400/50 text-emerald-200 text-xs sm:text-sm font-bold shadow animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Đang tự động chuyển sang bàn Thử thách ghép tranh bí ẩn...</span>
+            </div>
           </motion.div>
         )}
 

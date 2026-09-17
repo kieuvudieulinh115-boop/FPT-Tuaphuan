@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
-  Timer,
-  Play,
-  ArrowRight,
   RotateCcw,
   Sparkles,
   CheckCircle2,
@@ -24,7 +21,9 @@ interface ChallengeCardProps {
   currentScoreResult?: ChallengeScoreResult;
   validationResult?: FaceValidationResult;
   passThreshold: number;
-  totalTimeSeconds: number;
+  totalTimeSeconds?: number;
+  roundState?: 'ready' | 'countdown' | 'playing';
+  onResetToReady?: () => void;
   onPass: () => void;
   onRetry: () => void;
 }
@@ -43,7 +42,8 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
     isCentered: false
   },
   passThreshold,
-  totalTimeSeconds,
+  roundState = 'ready',
+  onResetToReady,
   onPass,
   onRetry
 }) => {
@@ -59,18 +59,12 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
     }
   };
 
-  // Game state:
-  // - 'ready': waiting for player to press 'Bắt đầu'
-  // - 'running': 10-second countdown in progress, player holds expression, tracking peak score
-  // - 'passed': finished countdown and peak score >= passThreshold
-  // - 'failed': finished countdown but peak score < passThreshold
-  const [gameState, setGameState] = useState<'ready' | 'running' | 'passed' | 'failed'>('ready');
-  const [timeLeft, setTimeLeft] = useState<number>(totalTimeSeconds);
   const [peakScore, setPeakScore] = useState<number>(0);
+  const [passedTriggered, setPassedTriggered] = useState<boolean>(false);
 
   const peakScoreRef = useRef<number>(0);
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const hasTriggeredPassScoreSoundRef = useRef<boolean>(false);
+  const passedTriggeredRef = useRef<boolean>(false);
+  const passTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Interactive 3D Perspective Tilt for Mobile Touch, Gyroscope & Mouse (gentle, zero re-renders)
   const { rotateX, rotateY, touchAndMouseProps } = useMobile3DTilt({
@@ -78,89 +72,68 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
     enableGyro: true
   });
 
-  // Reset state when challenge changes
+  // Handle roundState transitions and reset pass trigger
   useEffect(() => {
-    setGameState('ready');
-    setTimeLeft(totalTimeSeconds);
-    setPeakScore(0);
-    peakScoreRef.current = 0;
-    hasTriggeredPassScoreSoundRef.current = false;
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
+    if (roundState === 'ready') {
+      passedTriggeredRef.current = false;
+      setPassedTriggered(false);
+      setPeakScore(0);
+      peakScoreRef.current = 0;
+      if (passTimeoutRef.current) {
+        clearTimeout(passTimeoutRef.current);
+        passTimeoutRef.current = null;
+      }
+    } else if (roundState === 'playing') {
+      passedTriggeredRef.current = false;
+      setPassedTriggered(false);
     }
-  }, [challenge.id, totalTimeSeconds]);
+  }, [challenge.id, roundState]);
 
-  // Track the highest peak score ONLY while running & play sound when reaching required score
+  // Real-time score check:
+  // "Tự động chuyển ngay sang màn hình câu hỏi khi đạt điểm chuẩn."
   useEffect(() => {
-    if (gameState === 'running' && validationResult?.isValid) {
-      const currentScore = scoreResult?.score ?? 0;
-      if (currentScore > peakScoreRef.current) {
-        peakScoreRef.current = currentScore;
-        setPeakScore(currentScore);
-      }
+    if (roundState !== 'playing') return;
+    if (passedTriggeredRef.current) return;
 
-      // Phát âm thanh ngay khi đạt số điểm cần (passThreshold)
-      if (currentScore >= passThreshold && !hasTriggeredPassScoreSoundRef.current) {
-        hasTriggeredPassScoreSoundRef.current = true;
-        audioManager.playScoreTargetReached();
+    const currentScore = scoreResult?.score ?? 0;
+    if (currentScore > peakScoreRef.current) {
+      peakScoreRef.current = currentScore;
+      setPeakScore(currentScore);
+    }
+
+    // Tự động chuyển khi điểm số đạt hoặc vượt điểm chuẩn (hoặc evaluator xác nhận passed)
+    if (currentScore >= passThreshold || scoreResult?.passed) {
+      passedTriggeredRef.current = true;
+      setPassedTriggered(true);
+
+      audioManager.playScoreTargetReached();
+
+      // Đảm bảo timeout không bị hủy khi các frame sau cập nhật điểm
+      if (!passTimeoutRef.current) {
+        passTimeoutRef.current = setTimeout(() => {
+          passTimeoutRef.current = null;
+          onPass();
+        }, 350);
       }
     }
-  }, [gameState, scoreResult?.score, validationResult?.isValid, passThreshold]);
+  }, [roundState, scoreResult?.score, scoreResult?.passed, passThreshold, onPass]);
 
-  // Handle Starting Challenge Countdown (10 seconds)
-  const handleStartChallenge = () => {
+  // Handle retry
+  const handleRetry = () => {
     audioManager.playClick();
-    setGameState('running');
-    setTimeLeft(totalTimeSeconds);
-    setPeakScore(0);
-    peakScoreRef.current = 0;
-    hasTriggeredPassScoreSoundRef.current = false;
-
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
+    if (onResetToReady) {
+      onResetToReady();
+    } else {
+      onRetry();
     }
-
-    timerIntervalRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          if (timerIntervalRef.current) {
-            clearInterval(timerIntervalRef.current);
-            timerIntervalRef.current = null;
-          }
-
-          // Evaluate the peak score ONLY after the 10 seconds finish
-          const finalPeak = peakScoreRef.current;
-          const passed = finalPeak >= passThreshold;
-
-          setTimeout(() => {
-            if (passed) {
-              setGameState('passed');
-              audioManager.playSuccess();
-            } else {
-              setGameState('failed');
-              audioManager.playFail();
-            }
-          }, 50);
-
-          return 0;
-        }
-
-        // Sound countdown tick on last 3 seconds
-        if (prev <= 4) {
-          audioManager.playTick();
-        }
-
-        return prev - 1;
-      });
-    }, 1000);
   };
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
+      if (passTimeoutRef.current) {
+        clearTimeout(passTimeoutRef.current);
+        passTimeoutRef.current = null;
       }
     };
   }, []);
@@ -176,9 +149,6 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
         return <Activity className="w-6 h-6 text-cyan-300" />;
     }
   };
-
-  // Timer Progress Percentage
-  const timerPercentage = Math.max(0, Math.min(100, (timeLeft / totalTimeSeconds) * 100));
 
   return (
     <div
@@ -244,39 +214,114 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
               </div>
             </div>
 
-            {/* Circular Countdown Timer */}
-            <motion.div
-              animate={gameState === 'running' && timeLeft <= 3 ? { scale: [1, 1.08, 1] } : {}}
-              transition={{ repeat: Infinity, duration: 0.6 }}
-              className="flex items-center gap-2 bg-[#050c1b] px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border border-cyan-500/50 shadow-inner shrink-0"
-            >
-              <Timer className={`w-4 h-4 sm:w-5 sm:h-5 ${gameState === 'running' && timeLeft <= 3 ? 'text-rose-400 animate-bounce' : 'text-cyan-400'}`} />
+            {/* Target Score Badge (Thay thế cho giây đếm ngược) */}
+            <div className="flex items-center gap-1.5 bg-[#050c1b] px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border border-amber-400/40 shadow-[0_0_15px_rgba(245,158,11,0.15)] shrink-0">
+              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
               <div className="flex items-baseline gap-1 font-mono">
-                <span className={`text-lg sm:text-xl font-black ${gameState === 'running' && timeLeft <= 3 ? 'text-rose-400' : 'text-white'}`}>
-                  {timeLeft}
+                <span className="text-[11px] text-amber-200/80 font-medium">Mục tiêu:</span>
+                <span className="text-sm sm:text-base font-black text-amber-300 font-tech">
+                  ≥ {passThreshold} đ
                 </span>
-                <span className="text-[10px] sm:text-xs text-cyan-300/70">s</span>
               </div>
-            </motion.div>
+            </div>
           </div>
 
-          {/* Streamlined Call-to-Action: Rút ngắn 1 câu rõ ràng, in to và màu sắc nổi bật */}
+          {/* Sửa nội dung hướng dẫn ngắn gọn: Đạt điểm chuẩn để mở khóa câu hỏi */}
           <div className="my-2.5 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/80 via-blue-950/60 to-cyan-950/80 border border-cyan-400/40 shadow-[0_0_20px_rgba(6,182,212,0.15)] flex items-center gap-3">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(251,191,36,0.25)]">
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 animate-pulse" />
-            </div>
-            <p className="text-sm sm:text-base text-slate-100 font-semibold leading-relaxed">
-              Hãy{' '}
-              <span className="text-base sm:text-xl font-black uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.65)] px-2 py-0.5 rounded-lg bg-amber-400/10 border border-amber-400/30 inline-block">
-                {challenge.name}
-              </span>{' '}
-              để giành quyền trả lời câu hỏi!
+            <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 font-bold text-xs uppercase tracking-wider border border-amber-500/30 shrink-0">
+              Yêu cầu
+            </span>
+            <p className="text-sm sm:text-base text-slate-100 font-bold leading-relaxed">
+              Đạt điểm chuẩn để mở khóa câu hỏi.
             </p>
           </div>
         </div>
 
-        {/* STATE 1: READY (Waiting for player to click 'BẮT ĐẦU THỬ THÁCH') */}
-        {gameState === 'ready' && (
+        {/* STATE: PASSED CELEBRATION (Auto transition in progress) */}
+        {passedTriggered && (
+          <div className="my-2 bg-emerald-950/80 border-2 border-emerald-400/60 rounded-2xl p-4 text-center space-y-2.5 shadow-[0_0_25px_rgba(16,185,129,0.3)] animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-center gap-2 text-emerald-300 font-extrabold text-lg font-tech">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              <span>🎉 ĐÃ ĐẠT ĐIỂM CHUẨN ({scoreResult.score}/{passThreshold})!</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-900/60 border border-emerald-400/50 text-emerald-200 text-xs sm:text-sm font-semibold animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Đang tự động chuyển sang câu hỏi...</span>
+            </div>
+          </div>
+        )}
+
+        {/* STATE: ACTIVE PLAYING (Live Evaluation Score Meter) */}
+        {!passedTriggered && roundState === 'playing' && (
+          <div className="space-y-4 my-2 animate-in fade-in duration-200">
+            {/* Live Score and Peak Score Display */}
+            <div className="grid grid-cols-2 gap-3 bg-[#050c1b] p-3 rounded-2xl border border-cyan-500/40">
+              <div>
+                <span className="text-[11px] text-slate-400 block mb-0.5 font-medium">
+                  Điểm tức thời:
+                </span>
+                <div className="flex items-baseline gap-1 font-mono">
+                  <span
+                    className={`text-2xl font-black transition-colors ${
+                      scoreResult.score >= passThreshold ? 'text-emerald-400' : 'text-cyan-300'
+                    }`}
+                  >
+                    {scoreResult.score}
+                  </span>
+                  <span className="text-xs text-slate-400">/ 100</span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                  {scoreResult.details.metricName}
+                </p>
+              </div>
+
+              <div className="border-l border-cyan-900/60 pl-3">
+                <span className="text-[11px] text-slate-400 block mb-0.5 font-medium flex items-center gap-1">
+                  <span>⭐ Cao nhất:</span>
+                </span>
+                <div className="flex items-baseline gap-1 font-mono">
+                  <span
+                    className={`text-2xl font-black transition-colors ${
+                      peakScore >= passThreshold ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'text-cyan-300'
+                    }`}
+                  >
+                    {peakScore}
+                  </span>
+                  <span className="text-xs text-slate-400">/ 100</span>
+                </div>
+                <p className="text-[10px] text-cyan-400 font-semibold mt-0.5">
+                  Điểm chuẩn: ≥ {passThreshold} đ
+                </p>
+              </div>
+            </div>
+
+            {/* Real-time Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-semibold">
+                <span className="text-slate-300">
+                  {scoreResult.details.description}
+                </span>
+                <span className={`font-mono ${scoreResult.score >= passThreshold ? 'text-emerald-400' : 'text-cyan-300'}`}>
+                  {scoreResult.score}%
+                </span>
+              </div>
+
+              <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden p-0.5 border border-cyan-500/40">
+                <div
+                  className={`h-full rounded-full transition-all duration-150 ${
+                    scoreResult.score >= passThreshold
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'
+                      : 'bg-gradient-to-r from-blue-600 to-cyan-400'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(0, scoreResult.score))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STATE: READY OR COUNTDOWN */}
+        {!passedTriggered && roundState !== 'playing' && (
           <div className="my-1 sm:my-2 space-y-3 animate-in fade-in duration-300">
             {/* Camera readiness indicator */}
             <div className={`p-2.5 sm:p-3 rounded-2xl border flex items-center justify-between gap-2 transition-colors ${
@@ -298,232 +343,87 @@ const ChallengeCardComponent: React.FC<ChallengeCardProps> = ({
               </div>
               {validationResult.isValid && (
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-400/40 shrink-0">
-                  SẴN SÀNG
+                  CAMERA SẴN SÀNG
                 </span>
               )}
             </div>
 
-            {/* Real-time Live Expression Meter in Ready State */}
-            <div className="bg-[#050c1b]/90 p-2.5 sm:p-3 rounded-2xl border border-cyan-500/40 space-y-1.5">
+            {/* Target Score Box & Real-time Live Expression Meter in Ready State */}
+            <div className="bg-[#050c1b]/90 p-3 rounded-2xl border border-cyan-500/40 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-300 font-medium flex items-center gap-1.5 text-[11px] sm:text-xs">
                   <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                  Độ nhận diện ({challenge.name}):
+                  Điểm chuẩn yêu cầu:
                 </span>
-                <span className={`font-mono font-bold text-xs sm:text-sm ${
-                  validationResult.isValid && scoreResult.score >= passThreshold
-                    ? 'text-emerald-400'
-                    : 'text-cyan-300'
-                }`}>
-                  {validationResult.isValid ? scoreResult.score : 0} / 100
+                <span className="font-mono font-bold text-xs sm:text-sm text-cyan-300">
+                  {passThreshold} / 100 điểm
                 </span>
               </div>
 
               {/* Progress bar */}
-              <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden p-0.5 border border-cyan-500/30">
                 <div
-                  className={`h-full transition-all duration-150 rounded-full ${
-                    validationResult.isValid && scoreResult.score >= passThreshold
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
-                      : 'bg-gradient-to-r from-blue-500 to-cyan-400'
-                  }`}
-                  style={{ width: `${Math.min(100, validationResult.isValid ? scoreResult.score : 0)}%` }}
+                  className="h-full transition-all duration-150 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400"
+                  style={{ width: `${Math.min(100, scoreResult.score)}%` }}
                 />
               </div>
 
-              {validationResult.isValid && scoreResult.score >= passThreshold ? (
-                <p className="text-[10px] sm:text-[11px] text-emerald-300 font-semibold flex items-center gap-1 animate-pulse">
-                  <span>✨</span> Biểu cảm đang rất chuẩn ({scoreResult.score}đ)! Bấm BẮT ĐẦU ngay để ghi điểm 10s!
-                </p>
+              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <span>Điểm thử biểu cảm: {scoreResult.score}đ</span>
+                <span className="text-amber-300/80 font-semibold">Mục tiêu: {passThreshold}đ</span>
+              </div>
+            </div>
+
+            {/* Prompt pointing player to the Camera "SẴN SÀNG" button */}
+            <div className="p-3 rounded-2xl bg-cyan-950/50 border border-amber-500/30 text-center space-y-1">
+              {roundState === 'countdown' ? (
+                <div className="flex items-center justify-center gap-2 text-amber-300 font-bold text-xs sm:text-sm animate-pulse">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+                  <span>Đang đếm ngược <strong className="text-yellow-300 font-mono font-black text-sm">3 - 2 - 1</strong> trên Camera... Chuẩn bị biểu cảm!</span>
+                </div>
               ) : (
-                <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <span>🎯</span> Cần đạt tối thiểu <strong className="text-cyan-300 font-bold">{passThreshold} điểm</strong> để hoàn thành.
-                </p>
+                <div className="flex items-center justify-center gap-2 text-slate-100 font-bold text-xs sm:text-sm">
+                  <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                  <span>Bấm nút <strong className="text-amber-300 font-black uppercase tracking-wide drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]">"SẴN SÀNG"</strong> trên khung Camera để bắt đầu!</span>
+                </div>
               )}
             </div>
-
-            {/* Big Start Challenge Button */}
-            <motion.button
-              id="start-challenge-btn"
-              type="button"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98, y: 1 }}
-              onClick={handleStartChallenge}
-              className="w-full py-3 sm:py-3.5 px-4 sm:px-6 bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:via-sky-400 hover:to-cyan-300 text-slate-950 font-black text-sm sm:text-base rounded-2xl shadow-[0_0_25px_rgba(6,182,212,0.5)] flex items-center justify-center gap-2.5 cursor-pointer transition-all duration-200 uppercase tracking-wide group"
-            >
-              <div className="w-7 h-7 rounded-full bg-slate-950 text-cyan-300 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-                <Play className="w-3.5 h-3.5 fill-cyan-300 text-cyan-300 ml-0.5" />
-              </div>
-              <span>BẮT ĐẦU (GIỮ BIỂU CẢM 10S)</span>
-              <Sparkles className="w-4 h-4 text-slate-950 animate-spin" style={{ animationDuration: '4s' }} />
-            </motion.button>
           </div>
         )}
 
-      {/* STATE 2: RUNNING (Live Evaluation Score Meter) */}
-      {(gameState === 'running' || gameState === 'passed' || gameState === 'failed') && (
-        <div className="space-y-4 my-2">
-          {/* Live Score and Peak Score Display */}
-          <div className="grid grid-cols-2 gap-3 bg-[#050c1b] p-3 rounded-2xl border border-cyan-500/40">
-            <div>
-              <span className="text-[11px] text-slate-400 block mb-0.5 font-medium">
-                Điểm tức thời:
-              </span>
-              <div className="flex items-baseline gap-1 font-mono">
-                <span
-                  className={`text-2xl font-black transition-colors ${
-                    scoreResult.passed ? 'text-emerald-400' : 'text-cyan-300'
-                  }`}
-                >
-                  {validationResult.isValid ? scoreResult.score : 0}
+        {/* FOOTER STATUS */}
+        <div className="pt-3 border-t border-cyan-900/60">
+          {roundState === 'playing' && !passedTriggered && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-cyan-300 flex items-center gap-1.5 animate-pulse">
+                  <Activity className="w-4 h-4 text-cyan-400" />
+                  <span>Đang nhận diện biểu cảm AI...</span>
                 </span>
-                <span className="text-xs text-slate-400">/ 100</span>
-              </div>
-              <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                {scoreResult.details.metricName}
-              </p>
-            </div>
-
-            <div className="border-l border-cyan-900/60 pl-3">
-              <span className="text-[11px] text-slate-400 block mb-0.5 font-medium flex items-center gap-1">
-                <span>⭐ Cao nhất 10s:</span>
-              </span>
-              <div className="flex items-baseline gap-1 font-mono">
-                <span
-                  className={`text-2xl font-black transition-colors ${
-                    peakScore >= passThreshold ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'text-cyan-300'
-                  }`}
-                >
-                  {peakScore}
+                <span className="font-mono font-bold text-amber-300">
+                  Chuẩn: {passThreshold} điểm
                 </span>
-                <span className="text-xs text-slate-400">/ 100</span>
               </div>
-              <p className="text-[10px] text-cyan-400 font-semibold mt-0.5">
-                Mục tiêu: ≥ {passThreshold} đ
-              </p>
-            </div>
-          </div>
 
-          {/* Real-time Progress Bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs font-semibold">
-              <span className="text-slate-300">
-                {scoreResult.details.description}
-              </span>
-              <span className={`font-mono ${scoreResult.score >= passThreshold ? 'text-emerald-400' : 'text-cyan-300'}`}>
-                {scoreResult.score}%
-              </span>
+              <div className="p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-center">
+                <p className="text-xs text-emerald-300 font-semibold flex items-center justify-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                  <span>Đạt đủ {passThreshold} điểm hệ thống sẽ tự động chuyển sang câu hỏi ngay!</span>
+                </p>
+              </div>
             </div>
+          )}
 
-            <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden p-0.5 border border-cyan-500/40">
-              <div
-                className={`h-full rounded-full transition-all duration-150 ${
-                  scoreResult.score >= passThreshold
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'
-                    : 'bg-gradient-to-r from-blue-600 to-cyan-400'
-                }`}
-                style={{ width: `${Math.min(100, Math.max(0, scoreResult.score))}%` }}
-              />
+          {roundState !== 'playing' && (
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                <span>AI Face Mesh 478 điểm mốc</span>
+              </span>
+              <span className="text-cyan-400 font-mono font-bold">1 Mảnh / 1 Câu hỏi</span>
             </div>
-          </div>
+          )}
         </div>
-      )}
-
-      {/* FOOTER ACTIONS / STATUS */}
-      <div className="pt-3 border-t border-cyan-900/60">
-        {gameState === 'running' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-cyan-300 flex items-center gap-1.5 animate-pulse">
-                <Activity className="w-4 h-4 text-cyan-400" />
-                <span>Đang thực hiện thử thách...</span>
-              </span>
-              <span className="font-mono font-bold text-white">
-                Còn lại: {timeLeft}s
-              </span>
-            </div>
-
-            {/* Timer countdown bar */}
-            <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-cyan-500/40">
-              <div
-                className={`h-full transition-all duration-1000 ease-linear ${
-                  timeLeft <= 3 ? 'bg-rose-500' : 'bg-gradient-to-r from-blue-500 to-cyan-400'
-                }`}
-                style={{ width: `${timerPercentage}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-center text-slate-400 italic">
-              Hệ thống liên tục ghi nhận điểm. Sau khi đếm ngược về 0s, hệ thống sẽ chốt điểm cao nhất của bạn!
-            </p>
-          </div>
-        )}
-
-        {gameState === 'passed' && (
-          <div className="bg-emerald-950/60 border border-emerald-500/50 rounded-2xl p-4 text-center space-y-3 shadow-sm animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-center gap-2 text-emerald-300 font-bold text-lg font-tech">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-              <span>🎉 KẾT QUẢ SAU 10S: ĐẠT YÊU CẦU!</span>
-            </div>
-            <div className="p-3 rounded-xl bg-[#050c1b] border border-emerald-500/40 text-xs sm:text-sm space-y-1">
-              <p className="text-slate-200">
-                Điểm số cao nhất bạn đạt được: <span className="text-xl font-mono font-black text-emerald-400">{peakScore}</span> / 100 (Ngưỡng đạt: {passThreshold})
-              </p>
-              <p className="text-emerald-300 font-medium">
-                Xuất sắc! Bạn đã giữ nguyên biểu cảm thành công trong suốt 10 giây.
-              </p>
-            </div>
-            <motion.button
-              id="goto-question-btn"
-              type="button"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98, y: 1 }}
-              onClick={() => {
-                audioManager.playClick();
-                onPass();
-              }}
-              className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-base rounded-xl shadow-[0_0_20px_rgba(52,211,153,0.4)] cursor-pointer transition-transform"
-            >
-              <span>TRẢ LỜI CÂU HỎI STEM ĐỂ NHẬN MẢNH GHÉP</span>
-              <ArrowRight className="w-5 h-5" />
-            </motion.button>
-          </div>
-        )}
-
-        {gameState === 'failed' && (
-          <div className="bg-rose-950/60 border border-rose-500/50 rounded-2xl p-4 text-center space-y-3 shadow-sm animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-center gap-2 text-rose-300 font-bold text-lg font-tech">
-              <XCircle className="w-6 h-6 text-rose-400" />
-              <span>KẾT QUẢ SAU 10S: CHƯA ĐẠT</span>
-            </div>
-            <div className="p-3 rounded-xl bg-[#050c1b] border border-rose-500/40 text-xs sm:text-sm space-y-1">
-              <p className="text-slate-200">
-                Điểm cao nhất bạn đạt được: <span className="text-xl font-mono font-black text-rose-400">{peakScore}</span> / 100
-              </p>
-              <p className="text-rose-300 font-medium">
-                Chưa đủ ngưỡng {passThreshold} điểm. Bạn hãy làm lại, giữ thật rõ biểu cảm trong suốt 10 giây nhé!
-              </p>
-            </div>
-            <motion.button
-              id="retry-challenge-btn"
-              type="button"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98, y: 1 }}
-              onClick={() => {
-                audioManager.playClick();
-                setGameState('ready');
-                setTimeLeft(totalTimeSeconds);
-                setPeakScore(0);
-                peakScoreRef.current = 0;
-                onRetry();
-              }}
-              className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-white font-bold text-base rounded-xl shadow-md cursor-pointer transition-transform"
-            >
-              <RotateCcw className="w-5 h-5" />
-              <span>THỬ LẠI LẦN NỮA</span>
-            </motion.button>
-          </div>
-        )}
-      </div>
       </motion.div>
     </div>
   );

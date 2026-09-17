@@ -4,16 +4,28 @@ import { audioManager } from '../services/audio/AudioManager';
 
 interface ResetConfirmModalProps {
   isOpen: boolean;
-  unlockedCount: number;
+  unlockedCount?: number;
   totalPieces?: number;
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  warningText?: string;
+  confirmText?: string;
+  confirmIcon?: React.ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 const ResetConfirmModalComponent: React.FC<ResetConfirmModalProps> = ({
   isOpen,
-  unlockedCount,
+  unlockedCount = 0,
   totalPieces = 9,
+  title = 'Bắt Đầu Lại Từ Đầu?',
+  subtitle = 'XÁC NHẬN CHƠI LẠI',
+  description,
+  warningText,
+  confirmText = 'Đồng Ý Chơi Lại',
+  confirmIcon,
   onConfirm,
   onCancel
 }) => {
@@ -47,10 +59,10 @@ const ResetConfirmModalComponent: React.FC<ResetConfirmModalProps> = ({
           </div>
           <div>
             <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider font-mono">
-              XÁC NHẬN CHƠI LẠI
+              {subtitle}
             </span>
             <h3 className="text-lg font-black text-white font-tech">
-              Bắt Đầu Lại Từ Đầu?
+              {title}
             </h3>
           </div>
         </div>
@@ -58,12 +70,16 @@ const ResetConfirmModalComponent: React.FC<ResetConfirmModalProps> = ({
         {/* Warning Notice */}
         <div className="p-4 rounded-2xl bg-[#070e1f] border border-amber-500/30 space-y-2 text-sm text-slate-200 leading-relaxed">
           <p>
-            Bạn có chắc chắn muốn <span className="font-bold text-amber-300">đặt lại toàn bộ trò chơi</span> từ Vòng 1 không?
+            {description || (
+              <>
+                Bạn có chắc chắn muốn <span className="font-bold text-amber-300">đặt lại toàn bộ trò chơi</span> từ Vòng 1 không?
+              </>
+            )}
           </p>
           <div className="flex items-center gap-2 text-xs text-amber-400/90 pt-1 border-t border-slate-800">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              Tiến trình hiện tại ({unlockedCount}/{totalPieces} mảnh ghép đã mở) sẽ được thiết lập lại từ đầu.
+              {warningText || `Tiến trình hiện tại (${unlockedCount}/${totalPieces} mảnh ghép đã mở) sẽ được thiết lập lại từ đầu.`}
             </span>
           </div>
         </div>
@@ -89,8 +105,8 @@ const ResetConfirmModalComponent: React.FC<ResetConfirmModalProps> = ({
             }}
             className="px-4 py-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black text-sm shadow-[0_0_20px_rgba(244,63,94,0.4)] transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wide border border-rose-400/50"
           >
-            <RotateCcw className="w-4 h-4" />
-            <span>Đồng Ý Chơi Lại</span>
+            {confirmIcon || <RotateCcw className="w-4 h-4" />}
+            <span>{confirmText}</span>
           </button>
         </div>
       </div>

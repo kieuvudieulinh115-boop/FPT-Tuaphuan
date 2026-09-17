@@ -113,6 +113,8 @@ export const TeacherSettingsModal: React.FC<TeacherSettingsModalProps> = ({
   const [importStatus, setImportStatus] = useState<string>('');
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<string>('');
+  const [deleteConfirmSetId, setDeleteConfirmSetId] = useState<string | null>(null);
+  const [isConfirmingResetDefaults, setIsConfirmingResetDefaults] = useState<boolean>(false);
 
   const docInputRef = useRef<HTMLInputElement | null>(null);
   const singleImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -260,11 +262,21 @@ export const TeacherSettingsModal: React.FC<TeacherSettingsModalProps> = ({
   const handleDeleteSet = async (setId: string) => {
     audioManager.playClick();
     if (questionSets.length <= 1) {
-      alert('Không thể xóa bộ câu hỏi duy nhất còn lại.');
+      setSaveMessage('Không thể xóa bộ câu hỏi duy nhất còn lại.');
+      setTimeout(() => setSaveMessage(''), 3000);
       return;
     }
-    if (!confirm('Bạn có chắc chắn muốn xóa bộ câu hỏi này khỏi kho không?')) return;
+    if (deleteConfirmSetId !== setId) {
+      setDeleteConfirmSetId(setId);
+      setSaveMessage('Nhấp vào biểu tượng thùng rác màu đỏ lần nữa để xác nhận xóa.');
+      setTimeout(() => {
+        setDeleteConfirmSetId(prev => (prev === setId ? null : prev));
+        setSaveMessage('');
+      }, 4000);
+      return;
+    }
 
+    setDeleteConfirmSetId(null);
     const nextSets = questionSets.filter(s => s.id !== setId);
     setQuestionSets(nextSets);
     await dbService.saveQuestionSets(nextSets);
@@ -272,6 +284,8 @@ export const TeacherSettingsModal: React.FC<TeacherSettingsModalProps> = ({
     if (activeSetId === setId) {
       handleSelectSet(nextSets[0].id);
     }
+    setSaveMessage('Đã xóa bộ câu hỏi khỏi danh sách.');
+    setTimeout(() => setSaveMessage(''), 2500);
   };
 
   // File import for DOCX / PDF
@@ -742,12 +756,16 @@ export const TeacherSettingsModal: React.FC<TeacherSettingsModalProps> = ({
                             {questionSets.length > 1 && (
                               <button
                                 type="button"
-                                title="Xóa bộ câu hỏi"
+                                title={deleteConfirmSetId === set.id ? "Bấm lần nữa để xác nhận xóa bộ này" : "Xóa bộ câu hỏi"}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDeleteSet(set.id);
                                 }}
-                                className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded"
+                                className={`p-1 rounded transition-colors ${
+                                  deleteConfirmSetId === set.id
+                                    ? 'bg-rose-600 text-white animate-pulse'
+                                    : 'text-slate-400 hover:text-rose-400 hover:bg-slate-800'
+                                }`}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1356,19 +1374,38 @@ export const TeacherSettingsModal: React.FC<TeacherSettingsModalProps> = ({
                     Đặt lại toàn bộ kho 4 bộ câu hỏi, 8 mảnh ghép và cấu hình ban đầu
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (confirm('Bạn có chắc chắn muốn khôi phục về dữ liệu mặc định ban đầu không?')) {
-                      await onResetDefaults();
-                      onClose();
-                    }
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Khôi phục gốc</span>
-                </button>
+                {isConfirmingResetDefaults ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await onResetDefaults();
+                        setIsConfirmingResetDefaults(false);
+                        onClose();
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold cursor-pointer shadow animate-pulse"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Xác nhận khôi phục</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingResetDefaults(false)}
+                      className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingResetDefaults(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Khôi phục gốc</span>
+                  </button>
+                )}
               </div>
             </div>
           )}

@@ -16,7 +16,8 @@ import {
   Lock,
   Upload,
   Home,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { PuzzlePiece } from '../types';
 import { audioManager } from '../services/audio/AudioManager';
@@ -76,6 +77,9 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
   const [recentlyPlacedPieceId, setRecentlyPlacedPieceId] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showPlacementSuccessPopup, setShowPlacementSuccessPopup] = useState<boolean>(false);
+  const [popupPlacedCount, setPopupPlacedCount] = useState<number | null>(null);
 
   // Build the 9 authentic interlocking jigsaw puzzle piece definitions (3 rows x 3 columns)
   const jigsawPieces = useMemo<JigsawPiecePathInfo[]>(() => {
@@ -144,7 +148,8 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      alert('Vui lòng chọn một tệp hình ảnh hợp lệ (PNG, JPG, JPEG, WEBP, GIF)');
+      setUploadError('Vui lòng chọn một tệp hình ảnh hợp lệ (PNG, JPG, JPEG, WEBP, GIF)');
+      setTimeout(() => setUploadError(null), 4000);
       return;
     }
 
@@ -211,6 +216,12 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
         onPlacePiece(activePieceId);
       }
 
+      const newCount = placedPieceIds.includes(activePieceId)
+        ? placedPieceIds.length
+        : placedPieceIds.length + 1;
+      setPopupPlacedCount(newCount);
+      setShowPlacementSuccessPopup(true);
+
       // Automatically select the next unplaced unlocked piece if available
       const remaining = unplacedUnlockedIds.filter(id => id !== activePieceId);
       if (remaining.length > 0) {
@@ -218,7 +229,7 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
       }
 
       // Check if this was the 9th piece (completion)
-      if (placedPieceIds.length + 1 >= 9) {
+      if (newCount >= 9) {
         setTimeout(() => {
           audioManager.playVictory();
           try {
@@ -242,6 +253,31 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
       if (onPlacePiece) {
         onPlacePiece(slotId);
       }
+
+      const newCount = placedPieceIds.includes(slotId)
+        ? placedPieceIds.length
+        : placedPieceIds.length + 1;
+      setPopupPlacedCount(newCount);
+      setShowPlacementSuccessPopup(true);
+
+      const remaining = unplacedUnlockedIds.filter(id => id !== slotId);
+      if (remaining.length > 0) {
+        setActivePieceId(remaining[0]);
+      }
+
+      if (newCount >= 9) {
+        setTimeout(() => {
+          audioManager.playVictory();
+          try {
+            confetti({
+              particleCount: 160,
+              spread: 90,
+              origin: { y: 0.55 },
+              colors: ['#06b6d4', '#22d3ee', '#fbbf24', '#ffffff']
+            });
+          } catch {}
+        }, 200);
+      }
       return;
     }
 
@@ -251,6 +287,16 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
     setTimeout(() => {
       setShakingSlotId(null);
     }, 400);
+  };
+
+  const handleContinueFromPopup = () => {
+    setShowPlacementSuccessPopup(false);
+    audioManager.playClick();
+    if (onContinueNextRound) {
+      onContinueNextRound();
+    } else if (onBackToChallenge) {
+      onBackToChallenge();
+    }
   };
 
   // Drag and drop handlers
@@ -402,20 +448,8 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
           </span>
         </div>
 
-        {/* Right Actions: Upload Photo & Return to Home Challenge */}
+        {/* Right Actions: Return to Home Challenge */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Upload Button */}
-          <button
-            id="btn-upload-puzzle-image-top"
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#081830] hover:bg-[#0f2a52] border border-cyan-400 text-cyan-300 hover:text-white font-bold text-xs sm:text-sm shadow transition-all cursor-pointer active:scale-95"
-            title="Tải ảnh riêng của bạn làm tranh ghép (PNG, JPG, WEBP)"
-          >
-            <Upload className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">Tải ảnh lên</span>
-          </button>
-
           {/* Return to Home / Next Challenge */}
           <button
             id="btn-nav-home-challenge"
@@ -437,7 +471,19 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
         </div>
       </div>
 
-      {/* ================= 2. MAIN WORKSPACE (LEFT SCI-FI CYBER CARD + RIGHT WOODEN JIGSAW BOARD) ================= */}
+      {/* Upload Error Banner */}
+      {uploadError && (
+        <div className="relative z-20 mt-2 px-4 py-2.5 rounded-xl bg-rose-950/90 border border-rose-500 text-rose-200 text-xs sm:text-sm font-medium flex items-center justify-between shadow-lg animate-in fade-in duration-200">
+          <span>{uploadError}</span>
+          <button
+            type="button"
+            onClick={() => setUploadError(null)}
+            className="text-rose-400 hover:text-white text-xs font-bold uppercase ml-3 cursor-pointer"
+          >
+            Đóng
+          </button>
+        </div>
+      )}
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 my-auto items-center py-3">
         {/* ================= LEFT COLUMN: SCI-FI NEON CYAN CARD (MATCHING REFERENCE IMAGE) ================= */}
         <div className="lg:col-span-4 flex flex-col justify-center items-center w-full max-w-[360px] mx-auto">
@@ -702,85 +748,85 @@ export const PuzzleBoard: React.FC<PuzzleBoardProps> = ({
         </div>
       </div>
 
-      {/* ================= BANNER: PROMPT TO RETURN TO HOME CHALLENGE AFTER PLACING A PIECE ================= */}
-      {!isAllSolved && (recentlyPlacedPieceId !== null || placedPieceIds.length > 0) && (
-        <div className="relative z-10 w-full max-w-5xl mx-auto my-2 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-[#061e38]/95 via-[#0b2f5c]/95 to-[#061e38]/95 border-2 border-emerald-400/90 shadow-[0_0_25px_rgba(16,185,129,0.35)] flex flex-wrap items-center justify-between gap-3 animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300 shrink-0">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-            </div>
-            <div>
-              <div className="font-extrabold text-sm sm:text-base text-emerald-300 flex items-center gap-2">
-                <span>🎉 ĐÃ GHÉP THÀNH CÔNG VÀO BÀN CỜ!</span>
-                <span className="text-xs font-mono font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-500/40">
-                  {placedPieceIds.length}/9 mảnh
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Tuyệt vời! Nhấn nút bên cạnh để quay về Home thực hiện thử thách khuôn mặt và nhận câu hỏi tiếp theo!
-              </p>
-            </div>
-          </div>
+      {/* Clean Compact Hint Bar */}
+      <div className="relative z-10 w-full max-w-lg mx-auto rounded-full bg-[#06142a]/85 border border-cyan-500/40 px-4 py-2 flex items-center justify-center gap-2 text-cyan-300 text-xs shadow mt-2">
+        <Search className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+        <span>Quan sát răng cưa và chi tiết tranh, Kéo thả hoặc Nhấp ô để ghép</span>
+      </div>
 
-          <button
-            id="btn-return-home-after-placement"
-            type="button"
-            onClick={() => {
-              audioManager.playClick();
-              if (onContinueNextRound) {
-                onContinueNextRound();
-              } else if (onBackToChallenge) {
-                onBackToChallenge();
-              }
-            }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all cursor-pointer active:scale-95 shrink-0"
+      {/* ================= CENTERED SUCCESS PLACEMENT POPUP OVERLAY ================= */}
+      {showPlacementSuccessPopup && (
+        <div
+          id="puzzle-placement-success-overlay"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            id="puzzle-placement-success-popup"
+            className="relative w-full max-w-md sm:max-w-lg rounded-3xl bg-[#0a1532] border-2 border-cyan-400 p-6 sm:p-8 text-center flex flex-col items-center gap-5 shadow-[0_0_50px_rgba(6,182,212,0.45),0_20px_60px_rgba(0,0,0,0.9)]"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Home className="w-4 h-4" />
-            <span>TIẾP TỤC THỬ THÁCH KHUÔN MẶT »</span>
-          </button>
-        </div>
-      )}
+            {/* Tech Corner Brackets */}
+            <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-cyan-400 pointer-events-none" />
+            <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-cyan-400 pointer-events-none" />
+            <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-cyan-400 pointer-events-none" />
+            <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-cyan-400 pointer-events-none" />
 
-      {/* ================= 3. BOTTOM BAR (NEON CYAN PILL - EXACT MATCH TO IMAGE) ================= */}
-      <div className="relative z-10 w-full max-w-5xl mx-auto rounded-full bg-[#06142a]/95 border-2 border-cyan-400 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-[0_0_20px_rgba(6,182,212,0.3)] text-xs sm:text-sm mt-2">
-        {/* Left: Picture Name + Upload & Reset Actions */}
-        <div className="inline-flex items-center gap-2 text-cyan-200">
-          <ImageIcon className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span>Bức tranh:</span>
-          <span className="font-mono font-bold text-white max-w-[200px] truncate" title={themeTitle}>
-            {themeTitle}
-          </span>
-          <button
-            id="btn-upload-puzzle-image-bottom"
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="ml-2 px-3 py-1 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400 text-cyan-200 hover:text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow"
-          >
-            <Upload className="w-3.5 h-3.5 text-cyan-300" />
-            <span>Đổi / Tải ảnh lên</span>
-          </button>
-          {customArtworkUrl && onResetArtwork && (
+            {/* Close Button */}
             <button
-              id="btn-reset-default-puzzle-image"
               type="button"
               onClick={() => {
                 audioManager.playClick();
-                onResetArtwork();
+                setShowPlacementSuccessPopup(false);
               }}
-              className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 text-[11px] transition-all cursor-pointer"
-              title="Khôi phục ảnh mẫu Scratch"
+              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+              title="Đóng popup"
             >
-              Ảnh mẫu Scratch
+              <X className="w-5 h-5" />
             </button>
-          )}
-        </div>
 
-        {/* Right: Hint Instruction */}
-        <div className="inline-flex items-center gap-2 text-cyan-200/90 text-[11px] sm:text-xs">
-          <Search className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-          <span>Quan sát răng cưa và chi tiết tranh, Kéo thả hoặc Nhấp ô để ghép</span>
+            {/* Glowing Trophy / Sparkles Badge */}
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-cyan-400/20 to-emerald-500/20 border-2 border-cyan-400 flex items-center justify-center text-cyan-300 shadow-[0_0_30px_rgba(6,182,212,0.4)]">
+              <Sparkles className="w-9 h-9 sm:w-11 sm:h-11 text-amber-300 animate-pulse" />
+            </div>
+
+            {/* Main Title */}
+            <h3 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wide leading-snug drop-shadow-md">
+              🎉 ĐÃ GHÉP HÌNH THÀNH CÔNG VÀO KHUNG TRANH
+            </h3>
+
+            {/* Dynamic Progress Indicator */}
+            <div className="w-full flex flex-col items-center gap-2 py-1">
+              <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-2xl bg-[#040e24] border border-cyan-400/70 shadow-inner">
+                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-cyan-300">Tiến độ:</span>
+                <span className="text-xl sm:text-2xl font-mono font-black text-amber-300 drop-shadow">
+                  {Math.min(9, Math.max(placedPieceIds.length, popupPlacedCount || placedPieceIds.length))}/9 mảnh
+                </span>
+              </div>
+
+              {/* Visual Progress Bar */}
+              <div className="w-full max-w-xs h-3 rounded-full bg-[#050f24] border border-cyan-500/40 overflow-hidden shadow-inner p-0.5">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-teal-300 to-amber-400 transition-all duration-500 shadow-[0_0_12px_rgba(34,211,238,0.7)]"
+                  style={{
+                    width: `${Math.min(100, (Math.min(9, Math.max(placedPieceIds.length, popupPlacedCount || placedPieceIds.length)) / 9) * 100)}%`
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Primary Action Button: Glowing Yellow */}
+            <button
+              id="btn-continue-face-challenge-popup"
+              type="button"
+              onClick={handleContinueFromPopup}
+              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-300 hover:from-amber-300 hover:to-yellow-200 text-slate-950 font-black text-base sm:text-lg uppercase tracking-wider shadow-[0_0_35px_rgba(245,158,11,0.65)] hover:shadow-[0_0_50px_rgba(245,158,11,0.9)] hover:scale-[1.02] active:scale-95 transition-all cursor-pointer border-2 border-yellow-100 flex items-center justify-center gap-2 mt-1"
+            >
+              <span>TIẾP TỤC THỬ THÁCH KHUÔN MẶT »</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Victory Notification when all 9 pieces are placed */}
       {isAllSolved && (

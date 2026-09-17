@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Camera,
   AlertCircle,
@@ -18,12 +19,17 @@ import {
 import { faceLandmarkerService } from '../services/ai/FaceLandmarkerService';
 import { expressionAnalyzer } from '../services/ai/ExpressionAnalyzer';
 import { challengeEvaluator } from '../services/ai/ChallengeEvaluator';
+import { audioManager } from '../services/audio/AudioManager';
 import { ChallengeId, ChallengeScoreResult, FaceValidationResult } from '../types';
 
 interface FaceCameraProps {
   currentChallengeId: ChallengeId;
   passThreshold: number;
   isPaused: boolean;
+  roundState?: 'ready' | 'countdown' | 'playing';
+  isPassed?: boolean;
+  onPlayerReady?: () => void;
+  onCountdownComplete?: () => void;
   onValidationChange: (res: FaceValidationResult) => void;
   onScoreUpdate: (res: ChallengeScoreResult) => void;
 }
@@ -38,6 +44,10 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
   currentChallengeId,
   passThreshold,
   isPaused,
+  roundState = 'ready',
+  isPassed = false,
+  onPlayerReady,
+  onCountdownComplete,
   onValidationChange,
   onScoreUpdate
 }) => {
@@ -61,6 +71,48 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
   const [hasMultipleCameras, setHasMultipleCameras] = useState<boolean>(false);
   const [liveScoreVal, setLiveScoreVal] = useState<number>(0);
   const [livePassedVal, setLivePassedVal] = useState<boolean>(false);
+  const [countdownValue, setCountdownValue] = useState<number>(3);
+
+  const onCountdownCompleteRef = useRef(onCountdownComplete);
+  useEffect(() => {
+    onCountdownCompleteRef.current = onCountdownComplete;
+  }, [onCountdownComplete]);
+
+  // Countdown timer 3 -> 2 -> 1 inside Camera frame (protected from re-renders)
+  useEffect(() => {
+    if (roundState !== 'countdown') {
+      setCountdownValue(3);
+      return;
+    }
+
+    setCountdownValue(3);
+    audioManager.playTick();
+
+    let current = 3;
+    const interval = setInterval(() => {
+      current -= 1;
+      if (current > 0) {
+        setCountdownValue(current);
+        audioManager.playTick();
+      } else {
+        clearInterval(interval);
+        if (onCountdownCompleteRef.current) {
+          onCountdownCompleteRef.current();
+        }
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [roundState]);
+
+  const handleReadyClick = () => {
+    audioManager.playClick();
+    if (onPlayerReady) {
+      onPlayerReady();
+    }
+  };
 
   const [validation, setValidation] = useState<FaceValidationResult>({
     status: 'checking',
@@ -923,6 +975,54 @@ const FaceCameraComponent: React.FC<FaceCameraProps> = ({
           <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-cyan-400 pointer-events-none opacity-80 rounded-bl-lg" />
           <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-cyan-400 pointer-events-none opacity-80 rounded-br-lg" />
         </>
+      )}
+
+      {/* "SẴN SÀNG" Button - Placed prominently inside the Camera Frame with glowing Yellow Text */}
+      {cameraState === 'active' && !modelLoading && roundState === 'ready' && !isPassed && !livePassedVal && liveScoreVal < passThreshold && (
+        <div className="absolute bottom-14 sm:bottom-16 inset-x-0 flex justify-center z-30 pointer-events-auto px-4">
+          <motion.button
+            id="btn-camera-ready"
+            type="button"
+            whileHover={{ scale: 1.06, y: -2 }}
+            whileTap={{ scale: 0.94 }}
+            onClick={handleReadyClick}
+            className="px-8 py-3.5 sm:px-10 sm:py-4 rounded-2xl bg-slate-950/90 hover:bg-slate-900/95 border-2 border-amber-400 shadow-[0_0_35px_rgba(245,158,11,0.75),inset_0_0_20px_rgba(251,191,36,0.2)] flex items-center gap-3 cursor-pointer active:scale-95 transition-all ring-4 ring-amber-400/20"
+          >
+            <div className="w-7 h-7 rounded-full bg-amber-400/20 border border-amber-400/70 flex items-center justify-center shrink-0">
+              <Play className="w-3.5 h-3.5 fill-amber-400 text-amber-400 ml-0.5" />
+            </div>
+            <span className="text-amber-300 font-black text-base sm:text-lg tracking-widest uppercase drop-shadow-[0_0_12px_rgba(245,158,11,0.9)]">
+              SẴN SÀNG
+            </span>
+            <Sparkles className="w-5 h-5 text-amber-400 animate-pulse shrink-0" />
+          </motion.button>
+        </div>
+      )}
+
+      {/* Countdown 3 -> 2 -> 1 inside Camera Frame in Vibrant Gold / Yellow */}
+      {cameraState === 'active' && !modelLoading && roundState === 'countdown' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-30 bg-slate-950/40 backdrop-blur-[2px]">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={countdownValue}
+              initial={{ scale: 2.2, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.6, opacity: 0 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+              className="flex flex-col items-center justify-center"
+            >
+              <span className="text-9xl sm:text-[10rem] font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-amber-400 to-yellow-500 drop-shadow-[0_0_55px_rgba(245,158,11,1)] font-tech select-none">
+                {countdownValue}
+              </span>
+              <div className="mt-2 px-5 py-1.5 rounded-full bg-slate-950/90 border-2 border-amber-400/80 shadow-[0_0_20px_rgba(245,158,11,0.6)]">
+                <span className="text-amber-300 font-mono text-xs sm:text-sm font-black tracking-widest uppercase flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" style={{ animationDuration: '3s' }} />
+                  <span>CHUẨN BỊ...</span>
+                </span>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
       )}
     </div>
   );
