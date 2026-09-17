@@ -14,7 +14,7 @@ import { INITIAL_STEM_QUESTIONS } from './data/initialQuestions';
 import { DEFAULT_PUZZLE_PIECES } from './data/puzzlePieces';
 import { dbService } from './services/storage/IndexedDBService';
 import { audioManager } from './services/audio/AudioManager';
-import { STEM_ARTWORK_URL, STEM_THEME_TITLE } from './data/stemArtwork';
+import { STEM_THEME_TITLE } from './data/stemArtwork';
 
 // Components
 import { GameHeader } from './components/GameHeader';
@@ -38,8 +38,7 @@ export default function App() {
     enabledChallenges: CHALLENGE_LIBRARY.map(c => c.id),
     schoolName: 'Trường Tiểu học STEM Tân Tiến',
     teacherName: 'Ban Cố vấn Chuyên môn STEM',
-    puzzleThemeTitle: STEM_THEME_TITLE,
-    puzzleImageUrl: STEM_ARTWORK_URL
+    puzzleThemeTitle: STEM_THEME_TITLE
   });
 
   const [questions, setQuestions] = useState<Question[]>(INITIAL_STEM_QUESTIONS);
@@ -97,13 +96,8 @@ export default function App() {
           dbService.getQuestionSets(),
           dbService.getActiveQuestionSetId()
         ]);
-        const loadedSettings: TeacherSettingsConfig = {
-          ...savedSettings,
-          puzzleImageUrl: savedSettings.puzzleImageUrl || STEM_ARTWORK_URL,
-          puzzleThemeTitle: savedSettings.puzzleThemeTitle || STEM_THEME_TITLE
-        };
-        setSettings(loadedSettings);
-        setPuzzlePieces(savedPieces && savedPieces.length > 0 ? savedPieces : DEFAULT_PUZZLE_PIECES);
+        setSettings(savedSettings);
+        setPuzzlePieces(savedPieces);
 
         // Determine questions from active question set
         const activeId = savedSettings.activeQuestionSetId || savedActiveSetId || 'set_lop3_tinhoc';
@@ -164,6 +158,9 @@ export default function App() {
     setCurrentPhase('challenge');
     setActiveView('play');
     setCompletedTimestamp(undefined);
+    if (!audioManager.getMuted()) {
+      audioManager.startBgm();
+    }
   };
 
   // Face challenge passed -> proceed to STEM question
@@ -325,7 +322,7 @@ export default function App() {
   const handleResetArtwork = async () => {
     const updatedSettings: TeacherSettingsConfig = {
       ...settings,
-      puzzleImageUrl: STEM_ARTWORK_URL,
+      puzzleImageUrl: undefined,
       puzzleThemeTitle: STEM_THEME_TITLE
     };
     setSettings(updatedSettings);

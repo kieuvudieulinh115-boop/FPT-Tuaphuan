@@ -1082,11 +1082,6 @@ export const TeacherSettingsModal: React.FC<TeacherSettingsModalProps> = ({
                           imageUrl: theme.imageUrl
                         }));
                         setPieces(updated);
-                        setSettings(prev => ({
-                          ...prev,
-                          puzzleImageUrl: theme.imageUrl,
-                          puzzleThemeTitle: theme.title
-                        }));
                       }}
                       className="group p-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 transition-all cursor-pointer flex flex-col space-y-2 hover:scale-[1.02]"
                     >
